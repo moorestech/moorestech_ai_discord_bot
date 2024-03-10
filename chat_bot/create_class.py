@@ -1,19 +1,15 @@
 from util import embedding
 from util import query_ai
 
-system_prompt = 'This is part of the moorestech code. Please refer to this and follow the instructions.\n'
+system_prompt = '上記のコードを参考に、下記の指示に従ってください。ただし、これら上記のコードはユーザーからは表示されていません。そのため、指示に従う際は具体的にどのクラスを指しているのかクラス名を交え、moorestechを知らない人でもわかりやすい説明を作るように心がけてください。'
 
 user_request = """
-As a senior C# programmer, you will help develop the automated industrial game "moorestech".
-The code we need you to write this time is code related to adding the definition of veins to the Map definition, and adding the functionality to allow the mining machine to mine those veins.
-Please write a test code that enables the miner to mine the veins defined in the Map, referring to the test code for the miner so far.
-When writing the code, do not write it in parts, but write the entire code.
-
+moorestech clientのエントリーポイントを教えてください。
 """
 
-rag_prompt = embedding.create_rag_prompt(user_request, token_limit=30000)
+rag_prompt = embedding.create_rag_prompt(user_request, token_limit=70000)
 
-prompt = system_prompt + rag_prompt + "\n" + user_request
+prompt = rag_prompt + "\n" + system_prompt + "\n" + user_request
 
 print(prompt)
 
