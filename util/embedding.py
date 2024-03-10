@@ -98,8 +98,8 @@ def search_embedding(query, count=10):
     return results[:count]
 
 
-def create_rag_prompt(query, token_limit=5000, count=10):
-    results = search_embedding(query, count)
+def create_rag_prompt(query, token_limit=5000):
+    results = search_embedding(query, 10000)
     current_token_count = 0
     rag_cs_data = []
 
