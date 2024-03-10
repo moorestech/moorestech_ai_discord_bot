@@ -11,6 +11,7 @@ def get_cs_files():
         "FastNoiseLite.cs",
         "GlobalUsings.g",
         "Library",
+        "Dependencies",
         "MessagePack",
         "moorestech-client-private",
         "lilToon"]
