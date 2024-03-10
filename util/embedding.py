@@ -2,7 +2,7 @@ import json
 import numpy as np
 from openai import OpenAI
 from preprocess import cs_file
-import token_counter
+from util import token_counter
 
 EMBEDDING_PATH = "../moorestech-embedding.json"
 
@@ -65,8 +65,10 @@ def update_embedding():
     with open(EMBEDDING_PATH, 'w', encoding='utf-8') as f:
         json.dump(moorestech_embedding, f, ensure_ascii=False)
 
+
 def cos_sim(v1, v2):
     return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+
 
 def search_embedding(query, count=10):
     moorestech_embedding = json.load(open(EMBEDDING_PATH, 'r', encoding='utf-8'))
@@ -83,7 +85,6 @@ def search_embedding(query, count=10):
     # ベクトルを比較
     results = []
     for embedding in moorestech_embedding:
-
         similarity = cos_sim(q_embeddings, embedding['embedding'])
 
         results.append({
@@ -95,3 +96,31 @@ def search_embedding(query, count=10):
     results.sort(key=lambda x: x['similarity'], reverse=True)
 
     return results[:count]
+
+
+def create_rag_prompt(query, token_limit=5000, count=10):
+    results = search_embedding(query, count)
+    current_token_count = 0
+    rag_cs_data = []
+
+    for result in results:
+        cs_data = result['cs_data']
+        content_token_count = cs_data['content_token_count']
+        relative_path_token_count = cs_data['relative_path_token_count']
+
+        if current_token_count + content_token_count + relative_path_token_count > token_limit:
+            break
+
+        rag_cs_data.append(cs_data)
+        current_token_count += content_token_count + relative_path_token_count
+
+    rag_prompt = ""
+
+    # ファイルパスでソート
+    rag_cs_data.sort(key=lambda x: x['relative_path'])
+    for cs_data in rag_cs_data:
+        rag_prompt += cs_data['relative_path'] + "\n"
+        rag_prompt += "```cs\n" + cs_data['content'] + "\n```\n"
+        rag_prompt += "\n"
+
+    return rag_prompt
