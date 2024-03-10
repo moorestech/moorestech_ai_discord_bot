@@ -2,6 +2,7 @@ import json
 import numpy as np
 from openai import OpenAI
 from preprocess import cs_file
+import token_counter
 
 EMBEDDING_PATH = "../moorestech-embedding.json"
 
@@ -41,11 +42,18 @@ def update_embedding():
 
         print("success " + file['actual_path'])
 
+        file_name = file['file_name']
+        relative_path = file['relative_path']
+        content = file['content']
+
         # ベクトルをデータベースに追加
         moorestech_embedding.append({
-            'file_name': file['file_name'],
-            'relative_path': file['relative_path'],
-            'content': file['content'],
+            'file_name': file_name,
+            'file_name_token_count': token_counter.get_token_count(file_name),
+            'relative_path': relative_path,
+            'relative_path_token_count': token_counter.get_token_count(relative_path),
+            'content': content,
+            'content_token_count': token_counter.get_token_count(content),
             'embedding': res.data[0].embedding,
             'checked': True
         })
