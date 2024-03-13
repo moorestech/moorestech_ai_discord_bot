@@ -8,7 +8,7 @@ SYSTEM_PROMPT = """
 
 
 def ask_ai(usr_prompt):
-    rag_prompt = embedding.create_rag_prompt(usr_prompt, token_limit=70000)
+    rag_prompt = embedding.create_rag_prompt(usr_prompt, token_limit=20000)
     print("[ask_ai] rag_prompt:", rag_prompt)
 
     prompt = rag_prompt + "\n" + SYSTEM_PROMPT + "\n" + usr_prompt
