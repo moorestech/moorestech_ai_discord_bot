@@ -1,9 +1,7 @@
 import os
-
-from discord.ext import commands
+from chat_bot import ask
 from discord import app_commands
 import discord
-from chat_bot import ask
 
 intents = discord.Intents.default()
 intents.message_content = True  # メッセージの内容を取得する権限
