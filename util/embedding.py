@@ -4,7 +4,7 @@ from openai import OpenAI
 from preprocess import cs_file
 from util import token_counter
 
-EMBEDDING_PATH = "../moorestech-embedding.json"
+EMBEDDING_PATH = "moorestech-embedding.json"
 
 client = OpenAI()
 
