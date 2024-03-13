@@ -1,6 +1,6 @@
 import os
 
-MOORESTECH_PATH = "/Users/sato-katsumi/moorestech"
+MOORESTECH_PATH = "/Users/katsumi.sato/moorestech"
 
 
 def get_cs_files():
@@ -31,7 +31,7 @@ def get_cs_files():
                         "actual_path": os.path.join(root, file),
                         "relative_path": os.path.relpath(os.path.join(root, file), MOORESTECH_PATH),
                         "file_name": file,
-                        "content": cs_source_code
+                        "content": cs_source_code.replace("﻿", "")  # BOMを削除
                     }
                 )
 
