@@ -1,3 +1,3 @@
 from chat_bot import ask
 
-print(ask.ask_ai("機械のロジックについて教えて"))
+ask.ask_ai("BlockPlaceEventToBlockInventoryConnect をVector2Intの接続からVector3Intの接続にしたいんだけど、ConnectBlockメソッドをどう変化させたらいい？")

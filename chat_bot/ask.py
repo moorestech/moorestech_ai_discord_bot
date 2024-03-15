@@ -14,7 +14,7 @@ def ask_ai(usr_prompt):
     prompt = rag_prompt + "\n" + SYSTEM_PROMPT + "\n" + usr_prompt
 
     print("[ask_ai] start query_ai...")
-    result = query_ai.query_ai(prompt, query_ai.ModelType.GPT4)
+    result = query_ai.query_ai(prompt, query_ai.ModelType.Claude3)
     print("[ask_ai] result:", result)
 
     return result
