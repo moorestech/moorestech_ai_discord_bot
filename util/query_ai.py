@@ -22,7 +22,7 @@ def query_ai(prompt, model_type):
             {'role': 'user', 'content': prompt}]
 
         completion = openai_client.chat.completions.create(
-            model="gpt-4-1106-preview",
+            model="gpt-4o",
             messages=messages,
             temperature=0.2,
         )
