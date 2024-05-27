@@ -14,7 +14,10 @@ def get_cs_files():
         "Dependencies",
         "MessagePack",
         "moorestech-client-private",
-        "lilToon"]
+        "lilToon",
+        "DOTween",
+        "moorestechInputSettings",
+    ]
 
     for root, dirs, files in os.walk(MOORESTECH_PATH):
         for file in files:
