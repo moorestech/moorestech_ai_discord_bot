@@ -1,0 +1,3356 @@
+moorestech_server/Assets/Scripts/Game.Gear/Common/RPM.cs
+```cs
+// ReSharper disable InconsistentNaming
+
+using UnitGenerator;
+
+namespace Game.Gear.Common
+{
+    [UnitOf(typeof(float), UnitGenerateOptions.ArithmeticOperator | UnitGenerateOptions.ValueArithmeticOperator | UnitGenerateOptions.Comparable)]
+    public partial struct RPM
+    {
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Paths/CalcFileHash.cs
+```cs
+using System;
+using System.IO;
+using System.Security.Cryptography;
+
+namespace Game.Paths
+{
+    public static class CalcFileHash
+    {
+        public static string GetSha1Hash(string filePath)
+        {
+            using var sha1 = new SHA1Managed();
+            using var stream = File.OpenRead(filePath);
+            var hash = sha1.ComputeHash(stream);
+            return BitConverter.ToString(hash).Replace("-", string.Empty);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/GameObjectExtension.cs
+```cs
+using UnityEngine;
+
+namespace Client.Common
+{
+    public static class GameObjectExtension
+    {
+        public static string GetFullPath(this GameObject obj)
+        {
+            return GetFullPath(obj.transform);
+        }
+        
+        public static string GetFullPath(this Transform t)
+        {
+            var path = t.name;
+            var parent = t.parent;
+            while (parent)
+            {
+                path = $"{parent.name}/{path}";
+                parent = parent.parent;
+            }
+            
+            return path;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Editor/SchemaWatcher.cs
+```cs
+
+```
+
+moorestech_server/Assets/Scripts/Server.Util/ToByteList.cs
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace Server.Util
+{
+    public static class ToByteList
+    {
+        public static List<byte> Convert(int sendData)
+        {
+            var result = BitConverter.GetBytes(sendData);
+            if (BitConverter.IsLittleEndian)
+                Array.Reverse(result);
+            return result.ToList();
+        }
+        
+        public static List<byte> Convert(short sendData)
+        {
+            var result = BitConverter.GetBytes(sendData);
+            if (BitConverter.IsLittleEndian)
+                Array.Reverse(result);
+            return result.ToList();
+        }
+        
+        public static List<byte> Convert(float sendData)
+        {
+            var result = BitConverter.GetBytes(sendData);
+            if (BitConverter.IsLittleEndian)
+                Array.Reverse(result);
+            return result.ToList();
+        }
+        
+        public static List<byte> Convert(string sendData)
+        {
+            return Encoding.UTF8.GetBytes(sendData).ToList();
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests.Module/TestMod/TestModDirectory.cs
+```cs
+using System;
+using System.IO;
+
+namespace Tests.Module.TestMod
+{
+    public class TestModDirectory
+    {
+        private static string FolderDirectory => Path.Combine(Environment.CurrentDirectory, "../", "moorestech_server", "Assets", "Scripts", "", "Tests.Module", "TestMod");
+        
+        public static string ConfigOnlyDirectory => Path.Combine(FolderDirectory, "ConfigOnly");
+        public static string ForUnitTestModDirectory => Path.Combine(FolderDirectory, "ForUnitTest");
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Paths/GameSystemPaths.cs
+```cs
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+
+namespace Game.Paths
+{
+    public static class GameSystemPaths
+    {
+        public static string GameSystemDirectory
+        {
+            get
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    return DirectoryCreator("C:\\Users", Environment.UserName, "AppData", "Roaming", ".moorestech");
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                    return DirectoryCreator("/Users", Environment.UserName, "Library", "Application Support",
+                        "moorestech");
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                    return DirectoryCreator("/home", Environment.UserName, ".moorestech");
+                throw new Exception("Unsupported OS");
+            }
+        }
+        
+        public static string TmpFileDirectory => DirectoryCreator(GameSystemDirectory, "tmp");
+        public static string ExtractedModDirectory => DirectoryCreator(TmpFileDirectory, "extracted_mods");
+        public static string SaveFileDirectory => DirectoryCreator(GameSystemDirectory, "saves");
+        
+        public static string GetExtractedModDirectory(string folderName)
+        {
+            return DirectoryCreator(ExtractedModDirectory, folderName);
+        }
+        
+        public static string GetSaveFilePath(string fileName)
+        {
+            return Path.Combine(SaveFileDirectory, fileName);
+        }
+        
+        
+        private static string DirectoryCreator(params string[] paths)
+        {
+            var directory = Path.Combine(paths);
+            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+            return directory;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Server.Protocol/PacketResponse/IPacketResponse.cs
+```cs
+using System.Collections.Generic;
+
+namespace Server.Protocol.PacketResponse
+{
+    public interface IPacketResponse
+    {
+        public ProtocolMessagePackBase GetResponse(List<byte> payload);
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Network/Settings/ConnectionServerConfig.cs
+```cs
+namespace Client.Network.Settings
+{
+    public class ConnectionServerConfig
+    {
+        public readonly string IP;
+        public readonly int Port;
+        
+        public ConnectionServerConfig(string ip, int port)
+        {
+            IP = ip;
+            Port = port;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Paths/StringExtension.cs
+```cs
+namespace Game.Paths
+{
+    public static class StringExtension
+    {
+        public static string ReplaceFileNotAvailableCharacter(this string fileName, string replace)
+        {
+            fileName = fileName.Replace("/", replace);
+            fileName = fileName.Replace("\\", replace);
+            fileName = fileName.Replace(" ", replace);
+            fileName = fileName.Replace(":", replace);
+            fileName = fileName.Replace("*", replace);
+            fileName = fileName.Replace("?", replace);
+            fileName = fileName.Replace("\"", replace);
+            fileName = fileName.Replace("<", replace);
+            fileName = fileName.Replace(">", replace);
+            fileName = fileName.Replace("|", replace);
+            fileName = fileName.Replace(".", replace);
+            return fileName;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/Extension/BlockPositionInfoExtension.cs
+```cs
+using UnityEngine;
+
+namespace Game.Block.Interface.Extension
+{
+    public static class BlockPositionInfoExtension
+    {
+        public static bool IsContainPos(this BlockPositionInfo self, Vector3Int pos)
+        {
+            return self.MinPos.x <= pos.x && pos.x <= self.MaxPos.x &&
+                   self.MinPos.y <= pos.y && pos.y <= self.MaxPos.y &&
+                   self.MinPos.z <= pos.z && pos.z <= self.MaxPos.z;
+        }
+        
+        public static bool IsOverlap(this BlockPositionInfo self, BlockPositionInfo other)
+        {
+            return self.MinPos.x <= other.MaxPos.x && other.MinPos.x <= self.MaxPos.x &&
+                   self.MinPos.y <= other.MaxPos.y && other.MinPos.y <= self.MaxPos.y &&
+                   self.MinPos.z <= other.MaxPos.z && other.MinPos.z <= self.MaxPos.z;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Server.Protocol/ServerConst.cs
+```cs
+namespace Server.Protocol
+{
+    public class ServerConst
+    {
+        public const int PollingRateMillSec = 100;
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/SceneConstant.cs
+```cs
+namespace Client.Common
+{
+    public class SceneConstant
+    {
+        public const string MainMenuSceneName = "MainMenu";
+        public const string GameInitializerSceneName = "GameInitialaizer";
+        public const string MainGameSceneName = "MainGame";
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Network/Settings/PlayerConnectionSetting.cs
+```cs
+namespace Client.Network.Settings
+{
+    public class PlayerConnectionSetting
+    {
+        public readonly int PlayerId;
+        
+        public PlayerConnectionSetting(int playerId)
+        {
+            PlayerId = playerId;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/EmotionType.cs
+```cs
+namespace Client.Skit.SkitTrack
+{
+    public enum EmotionType
+    {
+        Normal,
+        Happy,
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/BlockConstant.cs
+```cs
+using Core.Master;
+
+namespace Client.Common
+{
+    public static class BlockConstant
+    {
+        public static readonly BlockId NullBlockId = new(0);
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/Server/NetworkConst.cs
+```cs
+namespace Client.Common.Server
+{
+    public class NetworkConst
+    {
+        public const int UpdateRate = 2;
+        public const int UpdateIntervalMilliseconds = 1000 / UpdateRate;
+        public const float UpdateIntervalSeconds = 1.0f / UpdateRate;
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/BlockComponentManager.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.ComponentAttribute;
+
+namespace Game.Block.Interface
+{
+    public interface IBlockComponentManager
+    {
+        public T GetComponent<T>() where T : IBlockComponent;
+        
+        public bool ExistsComponent<T>() where T : IBlockComponent;
+        
+        public bool TryGetComponent<T>(out T component) where T : IBlockComponent;
+    }
+    
+    public class BlockComponentManager : IBlockComponentManager
+    {
+        private readonly List<IBlockComponent> _blockComponents = new();
+        private readonly Dictionary<Type, IBlockComponent> _disallowMultiple = new();
+        private bool IsDestroy { get; set; }
+        
+        public T GetComponent<T>() where T : IBlockComponent
+        {
+            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            
+            return (T)_blockComponents.Find(x => x is T);
+        }
+        
+        public bool ExistsComponent<T>() where T : IBlockComponent
+        {
+            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            
+            return _blockComponents.Exists(x => x is T);
+        }
+        
+        public bool TryGetComponent<T>(out T component) where T : IBlockComponent
+        {
+            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            
+            var result = _blockComponents.Find(x => x is T);
+            if (result == null)
+            {
+                component = default;
+                return false;
+            }
+            
+            component = (T)result;
+            return true;
+        }
+        
+        public void Destroy()
+        {
+            IsDestroy = true;
+            foreach (var blockComponent in _blockComponents) blockComponent.Destroy();
+        }
+        
+        public void AddComponent(IBlockComponent blockComponent)
+        {
+            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            
+            CheckDisallowMultiple();
+            
+            _blockComponents.Add(blockComponent);
+            
+            #region Internal
+            
+            void CheckDisallowMultiple()
+            {
+                var disallowMultiple = Attribute.GetCustomAttribute(blockComponent.GetType(), typeof(DisallowMultiple));
+                if (disallowMultiple == null) return;
+                
+                if (_disallowMultiple.ContainsKey(blockComponent.GetType())) throw new InvalidOperationException($"This component is already added. {blockComponent.GetType()}");
+                _disallowMultiple.Add(blockComponent.GetType(), blockComponent);
+            }
+            
+            #endregion
+        }
+        
+        public void AddComponents(IEnumerable<IBlockComponent> blockComponents)
+        {
+            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            
+            foreach (var blockComponent in blockComponents) AddComponent(blockComponent);
+        }
+        
+        public void RemoveComponent(IBlockComponent blockComponent)
+        {
+            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            
+            _blockComponents.Remove(blockComponent);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.MainMenu/LanguageSetting.cs
+```cs
+using Client.Localization;
+using TMPro;
+using UnityEngine;
+
+namespace Client.MainMenu
+{
+    public class LanguageSetting : MonoBehaviour
+    {
+        [SerializeField] private TMP_Dropdown tmpDropdown;
+        
+        private void Start()
+        {
+            tmpDropdown.ClearOptions();
+            tmpDropdown.AddOptions(Localize.LanguageCodes);
+            tmpDropdown.value = Localize.LanguageCodes.IndexOf(Localize.CurrentLanguageCode);
+            tmpDropdown.onValueChanged.AddListener(OnValueChanged);
+        }
+        
+        private void OnValueChanged(int index)
+        {
+            Localize.SetLanguage(Localize.LanguageCodes[index]);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/PlayerPrefsKeys.cs
+```cs
+namespace Client.Common
+{
+    public class PlayerPrefsKeys
+    {
+        public const string PlayerIdKey = "PlayerId";
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Challenge/ChallengeJsonObject.cs
+```cs
+using System.Collections.Generic;
+using Newtonsoft.Json;
+
+namespace Game.Challenge
+{
+    public class ChallengeJsonObject
+    {
+        [JsonProperty("completedGuids")] public List<string> CompletedGuids;
+        [JsonProperty("playerId")] public int PlayerId;
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Core.Master/MapObjectMaster.cs
+```cs
+using System;
+using Mooresmaster.Loader.MapObjectsModule;
+using Mooresmaster.Model.MapObjectsModule;
+using Newtonsoft.Json.Linq;
+
+namespace Core.Master
+{
+    public class MapObjectMaster
+    {
+        public readonly MapObjects MapObjects;
+        
+        public MapObjectMaster(JToken jToken)
+        {
+            MapObjects = MapObjectsLoader.Load(jToken);
+        }
+        
+        public MapObjectMasterElement GetMapObjectElement(Guid guid)
+        {
+            return Array.Find(MapObjects.Data, x => x.MapObjectGuid == guid);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Server/PacketTest/Event/EventTestUtil.cs
+```cs
+using System.Collections.Generic;
+using System.Linq;
+using MessagePack;
+using Server.Protocol.PacketResponse;
+
+namespace Tests.CombinedTest.Server.PacketTest.Event
+{
+    public class EventTestUtil
+    {
+        public static List<byte> EventRequestData(int playerID)
+        {
+            return MessagePackSerializer.Serialize(new EventProtocolMessagePack(playerID)).ToList();
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CharacterEmotionTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using static System.Enum;
+
+namespace Client.Skit.SkitTrack
+{
+    public class CharacterEmotionTrack : IStoryTrack
+    {
+        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
+        {
+            var characterKey = parameters[0];
+            var emotion = (EmotionType)Parse(typeof(EmotionType), parameters[1]);
+            var duration = float.Parse(parameters[2]);
+            
+            var character = storyContext.GetCharacter(characterKey);
+            character.SetEmotion(emotion, duration);
+            
+            return null;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Localization/TextMeshProLocalize.cs
+```cs
+using System;
+using TMPro;
+using UniRx;
+using UnityEngine;
+
+namespace Client.Localization
+{
+    [RequireComponent(typeof(TextMeshProUGUI))]
+    public class TextMeshProLocalize : MonoBehaviour
+    {
+        [SerializeField] private string key;
+        
+        private TMP_Text _text;
+        
+        private void Awake()
+        {
+            _text = GetComponent<TextMeshProUGUI>();
+            _text.text = Localize.Get(key);
+            
+            Localize.OnLanguageChanged.Subscribe(_ => GetComponent<TextMeshProUGUI>().text = Localize.Get(key))
+                .AddTo(this);
+        }
+        
+        public void SetKey(string key, params string[] addContents)
+        {
+            this.key = key;
+            
+            var text = string.Empty;
+            try
+            {
+                text = string.Format(Localize.Get(key), addContents);
+            }
+            catch (FormatException e)
+            {
+                text = "[Localize] Format Error : " + key;
+            }
+            catch (Exception e)
+            {
+                text = $"[Localize] Other Error : {key} : {e.Message}";
+            }
+            
+            if (_text == null) _text = GetComponent<TextMeshProUGUI>();
+            _text.text = text;
+            _text.ForceMeshUpdate();
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Core.Const/BlockConst.cs
+```cs
+using Core.Master;
+
+namespace Core.Const
+{
+    public static class BlockConst
+    {
+        public static readonly BlockId EmptyBlockId = new(0);
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/Extension/BlockExtension.cs
+```cs
+using Game.Block.Interface.Component;
+
+namespace Game.Block.Interface.Extension
+{
+    public static class BlockExtension
+    {
+        public static T GetComponent<T>(this IBlock block) where T : IBlockComponent
+        {
+            return block.ComponentManager.GetComponent<T>();
+        }
+        
+        public static bool ExistsComponent<T>(this IBlock block) where T : IBlockComponent
+        {
+            return block.ComponentManager.ExistsComponent<T>();
+        }
+        
+        public static bool TryGetComponent<T>(this IBlock block, out T component) where T : IBlockComponent
+        {
+            return block.ComponentManager.TryGetComponent(out component);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CharacterTransformTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+
+namespace Client.Skit.SkitTrack
+{
+    public class CharacterTransformTrack : IStoryTrack
+    {
+        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
+        {
+            var characterKey = parameters[0];
+            
+            var posX = float.Parse(parameters[2]);
+            var posY = float.Parse(parameters[3]);
+            var posZ = float.Parse(parameters[4]);
+            var pos = new Vector3(posX, posY, posZ);
+            
+            var rotX = float.Parse(parameters[6]);
+            var rotY = float.Parse(parameters[7]);
+            var rotZ = float.Parse(parameters[8]);
+            var rot = new Vector3(rotX, rotY, rotZ);
+            
+            var character = storyContext.GetCharacter(characterKey);
+            
+            character.SetTransform(pos, rot);
+            
+            return null;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/WaitTimeTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+
+namespace Client.Skit.SkitTrack
+{
+    public class WaitTimeTrack : IStoryTrack
+    {
+        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
+        {
+            var time = float.Parse(parameters[0]);
+            await UniTask.Delay((int)(time * 1000));
+            
+            return null;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/JumpTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+
+namespace Client.Skit.SkitTrack
+{
+    public class JumpTrack : IStoryTrack
+    {
+        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
+        {
+            return parameters[0];
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Electric/EnergizedRangeObject.cs
+```cs
+using UnityEngine;
+
+namespace Client.Game.InGame.Electric
+{
+    public class EnergizedRangeObject : MonoBehaviour
+    {
+        public void SetRange(int range)
+        {
+            var y = transform.localScale.y;
+            transform.localScale = new Vector3(range, y, range);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/ServerStarter.cs
+```cs
+using System;
+using System.Threading;
+using Core.Update;
+using Server.Boot;
+using UnityEngine;
+
+public class ServerStarter : MonoBehaviour
+{
+    private CancellationTokenSource _autoSaveToken;
+    private Thread _serverUpdateThread;
+
+    private void Start()
+    {
+        (_serverUpdateThread, _autoSaveToken) = StartServer.Start(new string[] { });
+        _serverUpdateThread.Start();
+    }
+
+    private void FixedUpdate()
+    {
+        GameUpdater.Update();
+    }
+
+    private void OnDestroy()
+    {
+        _serverUpdateThread.Abort();
+        _autoSaveToken.Cancel();
+        GameUpdater.Dispose();
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Gear/Common/Torque.cs
+```cs
+using UnitGenerator;
+
+namespace Game.Gear.Common
+{
+    [UnitOf(typeof(float), UnitGenerateOptions.ArithmeticOperator | UnitGenerateOptions.ValueArithmeticOperator | UnitGenerateOptions.Comparable)]
+    public partial struct Torque
+    {
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Entity/EntitiesDatastore.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Game.Entity.Interface;
+using UnityEngine;
+
+namespace Game.Entity
+{
+    public class EntitiesDatastore : IEntitiesDatastore
+    {
+        private readonly Dictionary<EntityInstanceId, IEntity> _entities = new();
+        
+        private readonly IEntityFactory _entityFactory;
+        
+        public EntitiesDatastore(IEntityFactory entityFactory)
+        {
+            _entityFactory = entityFactory;
+        }
+        
+        public void Add(IEntity entity)
+        {
+            _entities.Add(entity.InstanceId, entity);
+        }
+        
+        public bool Exists(EntityInstanceId instanceId)
+        {
+            return _entities.ContainsKey(instanceId);
+        }
+        
+        public IEntity Get(EntityInstanceId instanceId)
+        {
+            return _entities[instanceId];
+        }
+        
+        public List<EntityJsonObject> GetSaveJsonObject()
+        {
+            var saveData = new List<EntityJsonObject>();
+            foreach (KeyValuePair<EntityInstanceId, IEntity> entity in _entities)
+            {
+                var e = entity.Value;
+                saveData.Add(new EntityJsonObject(e.EntityType, e.InstanceId.AsPrimitive(), e.Position));
+            }
+            
+            return saveData;
+        }
+        
+        public void LoadBlockDataList(List<EntityJsonObject> saveBlockDataList)
+        {
+            foreach (var save in saveBlockDataList)
+            {
+                var entity = _entityFactory.CreateEntity(save.Type, new EntityInstanceId(save.InstanceId));
+                _entities.Add(entity.InstanceId, entity);
+                
+                var pos = new Vector3(save.X, save.Y, save.Z);
+                SetPosition(new EntityInstanceId(save.InstanceId), pos);
+            }
+        }
+        
+        public void SetPosition(EntityInstanceId instanceId, Vector3 position)
+        {
+            if (_entities.TryGetValue(instanceId, out var entity))
+            {
+                entity.SetPosition(position);
+                return;
+            }
+            
+            throw new Exception("Entity not found " + instanceId);
+        }
+        
+        public Vector3 GetPosition(EntityInstanceId instanceId)
+        {
+            if (_entities.TryGetValue(instanceId, out var entity)) return entity.Position;
+            throw new Exception("Entity not found " + instanceId);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CameraworkTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using DG.Tweening;
+using UnityEngine;
+using static System.Enum;
+
+namespace Client.Skit.SkitTrack
+{
+    public class CameraworkTrack : IStoryTrack
+    {
+        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
+        {
+            var duration = float.Parse(parameters[0]);
+            var easing = (Ease)Parse(typeof(Ease), parameters[1]);
+            
+            var fromPos = new Vector3(float.Parse(parameters[3]), float.Parse(parameters[4]), float.Parse(parameters[5]));
+            var fromRot = new Vector3(float.Parse(parameters[7]), float.Parse(parameters[8]), float.Parse(parameters[9]));
+            
+            var toPos = new Vector3(float.Parse(parameters[11]), float.Parse(parameters[12]), float.Parse(parameters[13]));
+            var toRot = new Vector3(float.Parse(parameters[15]), float.Parse(parameters[16]), float.Parse(parameters[17]));
+            
+            storyContext.SkitCamera.TweenCamera(fromPos, fromRot, toPos, toRot, duration, easing);
+            
+            return null;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.World.EventHandler/EnergyEvent/EnergyService/EnergyServiceDependencyContainer.cs
+```cs
+using Game.EnergySystem;
+using Game.World.Interface.DataStore;
+
+namespace Game.World.EventHandler.EnergyEvent.EnergyService
+{
+    public class EnergyServiceDependencyContainer<TSegment> where TSegment : EnergySegment, new()
+    {
+        public readonly IWorldEnergySegmentDatastore<TSegment> WorldEnergySegmentDatastore;
+        
+        public EnergyServiceDependencyContainer(IWorldEnergySegmentDatastore<TSegment> worldEnergySegmentDatastore)
+        {
+            WorldEnergySegmentDatastore = worldEnergySegmentDatastore;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/TransitionTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+
+namespace Client.Skit.SkitTrack
+{
+    public class TransitionTrack : IStoryTrack
+    {
+        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
+        {
+            var isShow = parameters[0] == "TRUE";
+            var duration = float.Parse(parameters[1]);
+            storyContext.SkitUI.ShowTransition(isShow, duration);
+            
+            await UniTask.Delay((int)(duration * 1000));
+            
+            return null;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/Skit/SkitCamera.cs
+```cs
+using DG.Tweening;
+using UnityEngine;
+
+namespace Client.Skit.Skit
+{
+    public interface ISkitCamera
+    {
+        public void TweenCamera(Vector3 fromPos, Vector3 fromRot, Vector3 toPos, Vector3 toRot, float duration, Ease easing);
+        
+        public void SetTransform(Vector3 pos, Vector3 rot);
+        
+        public void SetActive(bool enabled);
+    }
+    
+    public class SkitCamera : MonoBehaviour, ISkitCamera
+    {
+        [SerializeField] private Camera camera;
+        
+        public void TweenCamera(Vector3 fromPos, Vector3 fromRot, Vector3 toPos, Vector3 toRot, float duration, Ease easing)
+        {
+            camera.transform.position = fromPos;
+            camera.transform.eulerAngles = fromRot;
+            
+            camera.transform.DOMove(toPos, duration).SetEase(easing);
+            camera.transform.DORotate(toRot, duration).SetEase(easing);
+        }
+        
+        public void SetTransform(Vector3 pos, Vector3 rot)
+        {
+            camera.transform.position = pos;
+            camera.transform.eulerAngles = rot;
+        }
+        
+        public void SetActive(bool enabled)
+        {
+            gameObject.SetActive(enabled);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Tutorial/UIHighlight/UIHighlightTutorialTargetObject.cs
+```cs
+using UnityEngine;
+
+namespace Client.Game.InGame.Tutorial.UIHighlight
+{
+    [RequireComponent(typeof(RectTransform))]
+    public class UIHighlightTutorialTargetObject : MonoBehaviour
+    {
+        public bool ActiveSelf => gameObject.activeInHierarchy;
+        
+        public string HighlightObjectId => highlightObjectId;
+        [SerializeField] private string highlightObjectId;
+        
+        public RectTransform RectTransform => rectTransform;
+        [SerializeField] private RectTransform rectTransform;
+        
+        public void Initialize(string uiObjectId)
+        {
+            highlightObjectId = uiObjectId;
+            rectTransform = GetComponent<RectTransform>();
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IBlockConnectorComponent.cs
+```cs
+using System.Collections.Generic;
+using Mooresmaster.Model.BlockConnectInfoModule;
+
+namespace Game.Block.Interface.Component
+{
+    public interface IBlockConnectorComponent<TTarget> : IBlockComponent where TTarget : IBlockComponent
+    {
+        public IReadOnlyDictionary<TTarget, (IConnectOption selfOption, IConnectOption targetOption)> ConnectedTargets { get; }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.SaveLoad/Json/WorldSaverForJson.cs
+```cs
+using System.IO;
+using Game.SaveLoad.Interface;
+
+namespace Game.SaveLoad.Json
+{
+    public class WorldSaverForJson : IWorldSaveDataSaver
+    {
+        private readonly AssembleSaveJsonText _assembleSaveJsonText;
+        private readonly SaveJsonFileName _fileName;
+        
+        public WorldSaverForJson(SaveJsonFileName fileName, AssembleSaveJsonText assembleSaveJsonText)
+        {
+            _fileName = fileName;
+            _assembleSaveJsonText = assembleSaveJsonText;
+        }
+        
+        public void Save()
+        {
+            File.WriteAllText(_fileName.FullSaveFilePath, _assembleSaveJsonText.AssembleSaveJson());
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/TextureExtension.cs
+```cs
+using UnityEngine;
+
+namespace Client.Common
+{
+    public static class TextureExtension
+    {
+        public static Sprite ToSprite(this Texture2D texture2D)
+        {
+            return texture2D == null ? null : Sprite.Create(texture2D, new Rect(0, 0, texture2D.width, texture2D.height), Vector2.zero);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Server.Boot/AutoSaveSystem.cs
+```cs
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Game.SaveLoad.Interface;
+
+namespace Server.Boot
+{
+    public class AutoSaveSystem
+    {
+        private readonly IWorldSaveDataSaver _worldSaveDataSaver;
+        
+        public AutoSaveSystem(IWorldSaveDataSaver worldSaveDataSaver)
+        {
+            _worldSaveDataSaver = worldSaveDataSaver;
+        }
+        
+        public async Task AutoSave(CancellationTokenSource cancellationTokenSource)
+        {
+            cancellationTokenSource.Token.ThrowIfCancellationRequested();
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30));
+                _worldSaveDataSaver.Save();
+                if (cancellationTokenSource.Token.IsCancellationRequested) break;
+            }
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/BlockInstanceId.cs
+```cs
+using System;
+using UnitGenerator;
+
+namespace Game.Block.Interface
+{
+    [UnitOf(typeof(int), UnitGenerateOptions.MessagePackFormatter | UnitGenerateOptions.Comparable)]
+    public readonly partial struct BlockInstanceId
+    {
+        private static readonly Random Random = new(130851);
+        
+        public static BlockInstanceId Create()
+        {
+            return new BlockInstanceId(Random.Next(int.MinValue, int.MaxValue));
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/IStoryTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+
+namespace Client.Skit.SkitTrack
+{
+    public interface IStoryTrack
+    {
+        public UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters);
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/LayerConst.cs
+```cs
+using UnityEngine;
+
+namespace Client.Common
+{
+    public class LayerConst
+    {
+        public static readonly int BlockLayer = LayerMask.NameToLayer("Block");
+        public static readonly int MapObjectLayer = LayerMask.NameToLayer("MapObject");
+        public static readonly int PlayerLayer = LayerMask.NameToLayer("Player");
+        
+        public static readonly int BlockOnlyLayerMask = 1 << BlockLayer;
+        public static readonly int MapObjectOnlyLayerMask = 1 << MapObjectLayer;
+        public static readonly int PlayerOnlyLayerMask = 1 << PlayerLayer;
+        
+        public static readonly int WithoutMapObjectAndPlayerLayerMask = ~MapObjectOnlyLayerMask & ~PlayerOnlyLayerMask;
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/StoryTrackDefine.cs
+```cs
+namespace Client.Skit.SkitTrack
+{
+    public class StoryTrackDefine
+    {
+        public static IStoryTrack GetStoryTrack(string key)
+        {
+            return key switch
+            {
+                "Camerawork" => new CameraworkTrack(),
+                "CameraWarp" => new CameraWarpTrack(),
+                "Text" => new TextTrack(),
+                "CharacterTransform" => new CharacterTransformTrack(),
+                "CharacterMotion" => new CharacterMotionTrack(),
+                "CharacterEmotion" => new CharacterEmotionTrack(),
+                "WaitTime" => new WaitTimeTrack(),
+                "Transition" => new TransitionTrack(),
+                "SelectionTrack" => new SelectionTrack(),
+                "Jump" => new JumpTrack(),
+                _ => null,
+            };
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/IWorldEnergySegmentDatastore.cs
+```cs
+using Game.EnergySystem;
+
+namespace Game.World.Interface.DataStore
+{
+    public interface IWorldEnergySegmentDatastore<TSegment> where TSegment : EnergySegment, new()
+    {
+        public TSegment GetEnergySegment(IElectricTransformer transformer);
+        public TSegment GetEnergySegment(int index);
+        public TSegment CreateEnergySegment();
+        public void SetEnergySegment(TSegment energySegment);
+        public void RemoveEnergySegment(TSegment energySegment);
+        public int GetEnergySegmentListCount();
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.EnergySystem/ElectricPower.cs
+```cs
+using UnitGenerator;
+
+namespace Game.EnergySystem
+{
+    [UnitOf(typeof(float), UnitGenerateOptions.ArithmeticOperator | UnitGenerateOptions.ValueArithmeticOperator | UnitGenerateOptions.Comparable)]
+    public readonly partial struct ElectricPower
+    {
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Input/InputManager.cs
+```cs
+using System;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace Client.Input
+{
+    public static class InputManager
+    {
+        private static PayerInputManager player;
+        private static PlayableInputManager playable;
+        private static UIInputManager ui;
+        private static MoorestechInputSettings _instance;
+        public static PayerInputManager Player => player ??= new PayerInputManager(Instance);
+        
+        public static PlayableInputManager Playable => playable ??= new PlayableInputManager(Instance);
+        
+        public static UIInputManager UI => ui ??= new UIInputManager(Instance);
+        
+        
+        private static MoorestechInputSettings Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = new MoorestechInputSettings();
+                    _instance.Enable();
+                }
+                
+                return _instance;
+            }
+        }
+        
+        public static void MouseCursorVisible(bool isVisible)
+        {
+            Cursor.lockState = isVisible ? CursorLockMode.None : CursorLockMode.Locked;
+        }
+    }
+    
+    public class PayerInputManager
+    {
+        public readonly InputKey Jump;
+        public readonly InputKey Look;
+        public readonly InputKey Move;
+        public readonly InputKey Sprint;
+        
+        public PayerInputManager(MoorestechInputSettings settings)
+        {
+            Move = new InputKey(settings.Player.Move);
+            Look = new InputKey(settings.Player.Look);
+            Jump = new InputKey(settings.Player.Jump);
+            Sprint = new InputKey(settings.Player.Sprint);
+        }
+    }
+    
+    public class PlayableInputManager
+    {
+        public readonly InputKey BlockPlaceRotation;
+        public readonly InputKey ClickPosition;
+        public readonly InputKey ScreenLeftClick;
+        public readonly InputKey ScreenRightClick;
+        
+        public PlayableInputManager(MoorestechInputSettings settings)
+        {
+            ScreenLeftClick = new InputKey(settings.Playable.ScreenLeftClick);
+            ScreenRightClick = new InputKey(settings.Playable.ScreenRightClick);
+            ClickPosition = new InputKey(settings.Playable.ClickPosition);
+            BlockPlaceRotation = new InputKey(settings.Playable.BlockPlaceRotation);
+        }
+    }
+    
+    public class UIInputManager
+    {
+        public readonly InputKey AllCraft;
+        public readonly InputKey BlockDelete;
+        public readonly InputKey CloseUI;
+        public readonly InputKey HotBar;
+        public readonly InputKey InventoryItemHalve;
+        public readonly InputKey InventoryItemOnePut;
+        public readonly InputKey ItemDirectMove;
+        public readonly InputKey OneStackCraft;
+        public readonly InputKey OpenInventory;
+        public readonly InputKey OpenMenu;
+        public readonly InputKey QuestUI;
+        public readonly InputKey SwitchHotBar;
+        
+        public UIInputManager(MoorestechInputSettings settings)
+        {
+            OpenMenu = new InputKey(settings.UI.OpenMenu);
+            CloseUI = new InputKey(settings.UI.CloseUI);
+            OpenInventory = new InputKey(settings.UI.OpenInventory);
+            InventoryItemOnePut = new InputKey(settings.UI.InventoryItemOnePut);
+            InventoryItemHalve = new InputKey(settings.UI.InventoryItemHalve);
+            HotBar = new InputKey(settings.UI.HotBar);
+            SwitchHotBar = new InputKey(settings.UI.SwitchHotBar);
+            BlockDelete = new InputKey(settings.UI.BlockDelete);
+            AllCraft = new InputKey(settings.UI.AllCraft);
+            OneStackCraft = new InputKey(settings.UI.OneStackCraft);
+            QuestUI = new InputKey(settings.UI.QuestUI);
+            ItemDirectMove = new InputKey(settings.UI.ItemDirectMove);
+        }
+    }
+    
+    public class InputKey
+    {
+        private readonly InputAction _inputAction;
+        
+        
+        public InputKey(InputAction key)
+        {
+            _inputAction = key;
+            key.started += _ => { OnGetKeyDown?.Invoke(); };
+            key.performed += _ => { OnGetKey?.Invoke(); };
+            key.canceled += _ => { OnGetKeyUp?.Invoke(); };
+        }
+        
+        public bool GetKeyDown => _inputAction.WasPressedThisFrame();
+        public bool GetKey => _inputAction.IsPressed();
+        public bool GetKeyUp => _inputAction.WasReleasedThisFrame();
+        
+        public event Action OnGetKeyDown;
+        public event Action OnGetKey;
+        public event Action OnGetKeyUp;
+        
+        public TValue ReadValue<TValue>() where TValue : struct
+        {
+            return _inputAction.ReadValue<TValue>();
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/ServerConst.cs
+```cs
+using static System.IO.Path;
+
+namespace Client.Common
+{
+    public class ServerConst
+    {
+        public const string LocalServerIp = "127.0.0.1";
+        public const int LocalServerPort = 11564;
+        
+        public const int DefaultPlayerId = 1;
+        
+        
+        public static readonly string ServerDirName = "Server";
+        public static readonly string ServerDirectory = GetFullPath("./" + ServerDirName);
+        
+        public static readonly string ServerExePath = Combine(ServerDirectory, "moorestech_server.exe");
+        public static readonly string ServerModsDirectory = Combine(ServerDirectory, "mods");
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/UI/UIState/IUIState.cs
+```cs
+namespace Client.Game.InGame.UI.UIState
+{
+    public interface IUIState
+    {
+        public void OnEnter(UIStateEnum lastStateEnum);
+        public UIStateEnum GetNext();
+        public void OnExit();
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/IWorldBlockDatastore.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Core.Master;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.State;
+using UnityEngine;
+
+namespace Game.World.Interface.DataStore
+{
+    public interface IWorldBlockDatastore
+    {
+        public IReadOnlyDictionary<BlockInstanceId, WorldBlockData> BlockMasterDictionary { get; }
+        
+        public IObservable<(BlockState state, WorldBlockData blockData)> OnBlockStateChange { get; }
+        
+        public bool TryAddBlock(BlockId blockId, Vector3Int position, BlockDirection direction, out IBlock block);
+        public bool TryAddLoadedBlock(Guid blockGuid, BlockInstanceId blockInstanceId, string state, Vector3Int position, BlockDirection direction, out IBlock block);
+        public bool RemoveBlock(Vector3Int pos);
+        public IBlock GetBlock(Vector3Int pos);
+        public IBlock GetBlock(BlockInstanceId blockInstanceId);
+        public WorldBlockData GetOriginPosBlock(Vector3Int pos);
+        public Vector3Int GetBlockPosition(BlockInstanceId blockInstanceId);
+        public BlockDirection GetBlockDirection(Vector3Int pos);
+        public List<BlockJsonObject> GetSaveJsonObject();
+        public void LoadBlockDataList(List<BlockJsonObject> saveBlockDataList);
+    }
+    
+    public static class WorldBlockDatastoreExtension
+    {
+        public static bool Exists(this IWorldBlockDatastore datastore, Vector3Int pos)
+        {
+            var block = datastore.GetBlock(pos);
+            return block != null;
+        }
+        
+        public static bool TryGetBlock(this IWorldBlockDatastore datastore, Vector3Int pos, out IBlock block)
+        {
+            block = datastore.GetBlock(pos);
+            return block != null;
+        }
+        
+        public static bool ExistsComponent<TComponent>(this IWorldBlockDatastore datastore, Vector3Int pos) where TComponent : IBlockComponent
+        {
+            var block = datastore.GetBlock(pos);
+            if (block == null) return false;
+            return block.ComponentManager.ExistsComponent<TComponent>();
+        }
+        
+        public static TComponent GetBlock<TComponent>(this IWorldBlockDatastore datastore, Vector3Int pos) where TComponent : IBlockComponent
+        {
+            var block = datastore.GetBlock(pos);
+            
+            if (block.ComponentManager.TryGetComponent(out TComponent component2)) return component2;
+            
+            return default;
+        }
+        
+        public static bool TryGetBlock<TComponent>(this IWorldBlockDatastore datastore, Vector3Int pos, out TComponent component) where TComponent : IBlockComponent
+        {
+            if (datastore.ExistsComponent<TComponent>(pos))
+            {
+                component = datastore.GetBlock<TComponent>(pos);
+                return true;
+            }
+            
+            component = default;
+            return false;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/Skit/Starter/PlayerSkitStarterDetector.cs
+```cs
+using UnityEngine;
+
+namespace Client.Game.Skit.Starter
+{
+    public class PlayerSkitStarterDetector : MonoBehaviour
+    {
+        [SerializeField] private StartSkitUI startSkitUI;
+        
+        public bool IsStartReady => CurrentSkitStarterObject != null;
+        public SkitStarterObject CurrentSkitStarterObject { get; private set; }
+        
+        private void OnDisable()
+        {
+            startSkitUI.ShowStartStoryUI(false);
+        }
+        
+        private void OnTriggerEnter(Collider other)
+        {
+            if (other.TryGetComponent<SkitStarterObject>(out var storyStarterObject))
+            {
+                CurrentSkitStarterObject = storyStarterObject;
+                startSkitUI.ShowStartStoryUI(true);
+            }
+        }
+        
+        private void OnTriggerExit(Collider other)
+        {
+            if (other.TryGetComponent<SkitStarterObject>(out var _))
+            {
+                CurrentSkitStarterObject = null;
+                startSkitUI.ShowStartStoryUI(false);
+            }
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/WorldSettingJsonObject.cs
+```cs
+using Newtonsoft.Json;
+using UnityEngine;
+
+namespace Game.World.Interface.DataStore
+{
+    public class WorldSettingJsonObject
+    {
+        [JsonProperty("SpawnX")] public int SpawnX;
+        [JsonProperty("SpawnY")] public int SpawnY;
+        
+        public WorldSettingJsonObject(Vector3Int spawnPoint)
+        {
+            SpawnX = spawnPoint.x;
+            SpawnY = spawnPoint.y;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CharacterMotionTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+
+namespace Client.Skit.SkitTrack
+{
+    public class CharacterMotionTrack : IStoryTrack
+    {
+        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
+        {
+            var characterKey = parameters[0];
+            var animationName = parameters[1];
+            
+            var character = storyContext.GetCharacter(characterKey);
+            character.PlayAnimation(animationName);
+            
+            return null;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.MainMenu/StartLocal.cs
+```cs
+using System.Diagnostics;
+using Client.Common;
+using Client.Starter;
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using Debug = UnityEngine.Debug;
+
+namespace Client.MainMenu
+{
+    public class StartLocal : MonoBehaviour
+    {
+        [SerializeField] private Button startLocalButton;
+        
+        private Process _serverProcess;
+        
+        
+        private void Start()
+        {
+            startLocalButton.onClick.AddListener(() => ConnectLocalServer().Forget());
+        }
+        
+        private async UniTask ConnectLocalServer()
+        {
+            Debug.Log("Server started");
+            
+            SceneManager.sceneLoaded += OnMainGameSceneLoaded;
+            SceneManager.LoadScene(SceneConstant.GameInitializerSceneName);
+        }
+        
+        private void OnMainGameSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            SceneManager.sceneLoaded -= OnMainGameSceneLoaded;
+            var starter = FindObjectOfType<InitializeScenePipeline>();
+            
+            starter.SetProperty(new InitializeProprieties(
+                true, _serverProcess,
+                ServerConst.LocalServerIp,
+                ServerConst.LocalServerPort,
+                PlayerPrefs.GetInt(PlayerPrefsKeys.PlayerIdKey)));
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Entity.Interface/EntityInstanceId.cs
+```cs
+using UnitGenerator;
+
+namespace Game.Entity.Interface
+{
+    [UnitOf(typeof(long))]
+    public partial struct EntityInstanceId
+    {
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/UnitTest/Core/Other/UtilTest.cs
+```cs
+using Game.Block;
+using NUnit.Framework;
+
+namespace Tests.UnitTest.Core.Other
+{
+    public class UtilTest
+    {
+        //確立のテストだから1万回繰り返して平均を取る
+        //+-5%なら許容範囲内
+        [TestCase(0.0)]
+        [TestCase(0.1)]
+        [TestCase(0.2)]
+        [TestCase(0.3)]
+        [TestCase(0.3)]
+        [TestCase(0.5)]
+        [TestCase(0.6)]
+        [TestCase(0.7)]
+        [TestCase(0.8)]
+        [TestCase(0.9)]
+        [TestCase(1)]
+        public void DetectFromPercentTest(double percent)
+        {
+            var trueCnt = 0;
+            for (var i = 0; i < 10000; i++)
+                if (ProbabilityCalculator.DetectFromPercent(percent))
+                    trueCnt++;
+            
+            var truePercent = trueCnt / 10000.0;
+            Assert.True(percent - 0.5 < truePercent);
+            Assert.True(truePercent < percent + 0.5);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Entity.Interface/EntityJsonObject.cs
+```cs
+using Newtonsoft.Json;
+using UnityEngine;
+
+namespace Game.Entity.Interface
+{
+    public class EntityJsonObject
+    {
+        [JsonProperty("InstanceId")] public long InstanceId;
+        [JsonProperty("Type")] public string Type;
+        
+        [JsonProperty("X")] public float X;
+        [JsonProperty("Y")] public float Y;
+        [JsonProperty("Z")] public float Z;
+        
+        public EntityJsonObject(string type, long instanceId, Vector3 serverVector3)
+        {
+            Type = type;
+            InstanceId = instanceId;
+            X = serverVector3.x;
+            Y = serverVector3.y;
+            Z = serverVector3.z;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CameraWarpTrack.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+
+namespace Client.Skit.SkitTrack
+{
+    public class CameraWarpTrack : IStoryTrack
+    {
+        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
+        {
+            var pos = new Vector3(float.Parse(parameters[1]), float.Parse(parameters[2]), float.Parse(parameters[3]));
+            var rot = new Vector3(float.Parse(parameters[5]), float.Parse(parameters[6]), float.Parse(parameters[7]));
+            
+            storyContext.SkitCamera.SetTransform(pos, rot);
+            
+            return null;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/UI/SkitUI.cs
+```cs
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using DG.Tweening;
+using TMPro;
+using UnityEngine;
+
+namespace Client.Skit.UI
+{
+    public class SkitUI : MonoBehaviour
+    {
+        [SerializeField] private GameObject storyPanel;
+        
+        [SerializeField] private TMP_Text characterNameText;
+        [SerializeField] private TMP_Text storyText;
+        
+        [SerializeField] private CanvasGroup transitionImage;
+        
+        [SerializeField] private GameObject selectionPanel;
+        [SerializeField] private List<SelectionButton> selectionButtons;
+        
+        public void SetText(string characterName, string text)
+        {
+            storyPanel.SetActive(true);
+            characterNameText.text = characterName;
+            storyText.text = text.Replace("\\n", "\n");
+        }
+        
+        public void ShowTransition(bool isShow, float duration)
+        {
+            transitionImage.alpha = isShow ? 0 : 1;
+            transitionImage.DOFade(isShow ? 1 : 0, duration);
+        }
+        
+        public void ShowSelectionUI(bool enable)
+        {
+            selectionPanel.SetActive(enable);
+        }
+        
+        public async UniTask<int> WaitSelectText(List<string> texts)
+        {
+            for (var i = 0; i < selectionButtons.Count; i++)
+                if (i < texts.Count)
+                {
+                    selectionButtons[i].SetButton(texts[i], i);
+                    selectionButtons[i].SetActive(true);
+                }
+                else
+                {
+                    selectionButtons[i].SetActive(false);
+                }
+            
+            var cancelToken = this.GetCancellationTokenOnDestroy();
+            
+            var (_, resultIndex) = await UniTask.WhenAny(selectionButtons.Select(button => button.WaitClick(cancelToken)));
+            
+            return resultIndex;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.MainMenu/PopUp/ServerConnectPopup.cs
+```cs
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Client.MainMenu.PopUp
+{
+    public class ServerConnectPopup : MonoBehaviour
+    {
+        [SerializeField] private TMP_Text logText;
+        [SerializeField] private Button closeButton;
+        
+        private void Start()
+        {
+            closeButton.onClick.AddListener(() =>
+                gameObject.SetActive(false)
+            );
+        }
+        
+        public void SetText(string text)
+        {
+            gameObject.SetActive(true);
+            logText.text = text;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/EntityProperties.cs
+```cs
+using Server.Util.MessagePack;
+using UnityEngine;
+
+namespace Client.Common
+{
+    public class EntityProperties
+    {
+        public readonly long InstanceId;
+        public readonly Vector3 Position;
+        public readonly string State;
+        public readonly string Type;
+        
+        public EntityProperties(EntityMessagePack entityMessagePack)
+        {
+            InstanceId = entityMessagePack.InstanceId;
+            Type = entityMessagePack.Type;
+            var x = entityMessagePack.Position.X;
+            var y = entityMessagePack.Position.Y;
+            var z = entityMessagePack.Position.Z;
+            Position = new Vector3(x, y, z);
+            State = entityMessagePack.State;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Challenge/ChallengeTask/BlockPlaceChallengeTask.cs
+```cs
+using System;
+using Game.Context;
+using Game.World.Interface.DataStore;
+using Mooresmaster.Model.ChallengesModule;
+using UniRx;
+
+namespace Game.Challenge.Task
+{
+    public class BlockPlaceChallengeTask : IChallengeTask
+    {
+        public ChallengeMasterElement ChallengeMasterElement { get; }
+        public int PlayerId { get; }
+        
+        public IObservable<IChallengeTask> OnChallengeComplete => _onChallengeComplete;
+        private readonly Subject<IChallengeTask> _onChallengeComplete = new();
+        
+        private bool _completed;
+        
+        public static IChallengeTask Create(int playerId, ChallengeMasterElement challengeMasterElement)
+        {
+            return new BlockPlaceChallengeTask(playerId, challengeMasterElement);
+        }
+        public BlockPlaceChallengeTask(int playerId, ChallengeMasterElement challengeMasterElement)
+        {
+            ChallengeMasterElement = challengeMasterElement;
+            PlayerId = playerId;
+            
+            var worldEvent = ServerContext.WorldBlockUpdateEvent;
+            worldEvent.OnBlockPlaceEvent.Subscribe(OnBlockPlace);
+        }
+        
+        private void OnBlockPlace(BlockUpdateProperties properties)
+        {
+            if (_completed) return;
+            
+            var param = ChallengeMasterElement.TaskParam as BlockPlaceTaskParam;
+            if (param.BlockGuid == properties.BlockData.Block.BlockGuid)
+            {
+                _completed = true;
+                _onChallengeComplete.OnNext(this);
+            }
+        }
+        
+        public void ManualUpdate()
+        {
+            
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.CutScene/TimelinePlayer.cs
+```cs
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+using UnityEngine.Playables;
+
+namespace Client.CutScene
+{
+    public class TimelinePlayer : MonoBehaviour
+    {
+        [SerializeField] private PlayableDirector playableDirector;
+        
+        public async UniTask Play(PlayableAsset playableAsset)
+        {
+            playableDirector.playableAsset = playableAsset;
+            playableDirector.Play();
+            
+            await UniTask.WaitUntil(() => playableDirector.state != PlayState.Playing);
+            
+            playableDirector.playableAsset = null;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/StoryContext.cs
+```cs
+using System.Collections.Generic;
+using Client.Skit.Define;
+using Client.Skit.Skit;
+using Client.Skit.UI;
+using UnityEngine;
+
+namespace Client.Skit.SkitTrack
+{
+    public class StoryContext
+    {
+        private readonly Dictionary<string, SkitCharacter> _characters;
+        public readonly ISkitCamera SkitCamera;
+        public readonly SkitUI SkitUI;
+        public readonly VoiceDefine VoiceDefine;
+        
+        public StoryContext(SkitUI skitUI, Dictionary<string, SkitCharacter> characters, SkitCamera skitCamera, VoiceDefine voiceDefine)
+        {
+            SkitUI = skitUI;
+            _characters = characters;
+            SkitCamera = skitCamera;
+            VoiceDefine = voiceDefine;
+        }
+        
+        public SkitCharacter GetCharacter(string characterKey)
+        {
+            return _characters[characterKey];
+        }
+        
+        public void DestroyCharacter()
+        {
+            foreach (var character in _characters) Object.Destroy(character.Value.gameObject);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/UI/UIState/PauseMenuState.cs
+```cs
+using Client.Game.InGame.UI.UIState.UIObject;
+using Client.Input;
+
+namespace Client.Game.InGame.UI.UIState
+{
+    public class PauseMenuState : IUIState
+    {
+        private readonly PauseMenuObject _pauseMenu;
+        
+        public PauseMenuState(PauseMenuObject pauseMenu)
+        {
+            _pauseMenu = pauseMenu;
+            pauseMenu.gameObject.SetActive(false);
+        }
+        
+        public UIStateEnum GetNext()
+        {
+            if (InputManager.UI.CloseUI.GetKeyDown) return UIStateEnum.GameScreen;
+            
+            return UIStateEnum.Current;
+        }
+        
+        public void OnEnter(UIStateEnum lastStateEnum)
+        {
+            _pauseMenu.gameObject.SetActive(true);
+            InputManager.MouseCursorVisible(true);
+        }
+        
+        public void OnExit()
+        {
+            _pauseMenu.gameObject.SetActive(false);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/BlockJsonObject.cs
+```cs
+using System;
+using Newtonsoft.Json;
+using UnityEngine;
+
+namespace Game.World.Interface.DataStore
+{
+    public class BlockJsonObject
+    {
+        [JsonProperty("blockGuid")] public string BlockGuidStr;
+        [JsonIgnore] public Guid BlockGuid => Guid.Parse(BlockGuidStr);
+        
+        [JsonProperty("direction")] public int Direction;
+        [JsonProperty("entityId")] public int EntityId;
+        [JsonProperty("state")] public string State;
+        
+        [JsonIgnore] public Vector3Int Pos => new(X, Y, Z);
+        [JsonProperty("X")] public int X;
+        [JsonProperty("Y")] public int Y;
+        [JsonProperty("Z")] public int Z;
+        
+        public BlockJsonObject(Vector3Int pos, string blockGuid, int entityId, string state, int direction)
+        {
+            X = pos.x;
+            Y = pos.y;
+            Z = pos.z;
+            BlockGuidStr = blockGuid;
+            EntityId = entityId;
+            State = state;
+            Direction = direction;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.MainMenu/ResetStoryButton.cs
+```cs
+using Client.Game.Sequence;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Client.MainMenu
+{
+    public class ResetStoryButton : MonoBehaviour
+    {
+        [SerializeField] private Button resetStoryButton;
+        
+        private void Start()
+        {
+            resetStoryButton.onClick.AddListener(() =>
+            {
+                PlayerPrefs.DeleteKey(S1InitialMovie.S1InitialMoviePlayerPrefsKey);
+                PlayerPrefs.Save();
+            });
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Entity/IEntityObject.cs
+```cs
+using UnityEngine;
+
+namespace Client.Game.InGame.Entity
+{
+    public interface IEntityObject
+    {
+        public void SetDirectPosition(Vector3 position);
+        public void SetInterpolationPosition(Vector3 position);
+        public void Destroy();
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/UI/SelectionButton.cs
+```cs
+using System.Threading;
+using Cysharp.Threading.Tasks;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Client.Skit.UI
+{
+    public class SelectionButton : MonoBehaviour
+    {
+        [SerializeField] private Button button;
+        [SerializeField] private TMP_Text buttonText;
+        
+        private int _index;
+        
+        public void SetButton(string text, int index)
+        {
+            buttonText.text = text;
+            _index = index;
+        }
+        
+        public void SetActive(bool isActive)
+        {
+            gameObject.SetActive(isActive);
+        }
+        
+        public async UniTask<int> WaitClick(CancellationToken ct)
+        {
+            await button.OnClickAsync(ct);
+            return _index;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Editor/DirectoryProcessor.cs
+```cs
+//Credit https://kan-kikuchi.hatenablog.com/entry/DirectoryProcessor
+
+using System.IO;
+
+/// <summary>
+///     ディレクトリを操作するクラス
+/// </summary>
+public static class DirectoryProcessor
+{
+    /// <summary>
+    ///     ディレクトリとその中身を上書きコピー
+    /// </summary>
+    public static void CopyAndReplace(string sourcePath, string copyPath)
+    {
+        //既にディレクトリがある場合は削除し、新たにディレクトリ作成
+        Delete(copyPath);
+        Directory.CreateDirectory(copyPath);
+        
+        //ファイルをコピー
+        foreach (var file in Directory.GetFiles(sourcePath)) File.Copy(file, Path.Combine(copyPath, Path.GetFileName(file)));
+        
+        //ディレクトリの中のディレクトリも再帰的にコピー
+        foreach (var dir in Directory.GetDirectories(sourcePath)) CopyAndReplace(dir, Path.Combine(copyPath, Path.GetFileName(dir)));
+    }
+    
+    /// <summary>
+    ///     指定したディレクトリとその中身を全て削除する
+    /// </summary>
+    public static void Delete(string targetDirectoryPath)
+    {
+        if (!Directory.Exists(targetDirectoryPath)) return;
+        
+        //ディレクトリ以外の全ファイルを削除
+        var filePaths = Directory.GetFiles(targetDirectoryPath);
+        foreach (var filePath in filePaths)
+        {
+            File.SetAttributes(filePath, FileAttributes.Normal);
+            File.Delete(filePath);
+        }
+        
+        //ディレクトリの中のディレクトリも再帰的に削除
+        var directoryPaths = Directory.GetDirectories(targetDirectoryPath);
+        foreach (var directoryPath in directoryPaths) Delete(directoryPath);
+        
+        //中が空になったらディレクトリ自身も削除
+        Directory.Delete(targetDirectoryPath, false);
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Starter/InitializeProprieties.cs
+```cs
+using System.Diagnostics;
+
+namespace Client.Starter
+{
+    public class InitializeProprieties
+    {
+        public readonly bool IsLocal;
+        public readonly Process LocalServerProcess;
+        public readonly int PlayerId;
+        public readonly string ServerIp;
+        public readonly int ServerPort;
+        
+        public InitializeProprieties(bool isLocal, Process localServerProcess, string serverIp, int serverPort, int playerId)
+        {
+            IsLocal = isLocal;
+            LocalServerProcess = localServerProcess;
+            ServerIp = serverIp;
+            ServerPort = serverPort;
+            PlayerId = playerId;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/BlockSystem/PlaceSystem/BlockPlacePreviewObjectPool.cs
+```cs
+using System.Collections.Generic;
+using Client.Game.InGame.Context;
+using Core.Master;
+using UnityEngine;
+
+namespace Client.Game.InGame.BlockSystem.PlaceSystem
+{
+    public class BlockPlacePreviewObjectPool
+    {
+        private readonly Transform _parentTransform;
+        private readonly Dictionary<BlockId, List<PreviewObject>> _blockPreviewObjects = new();
+        
+        public BlockPlacePreviewObjectPool(Transform parentTransform)
+        {
+            _parentTransform = parentTransform;
+        }
+        
+        class PreviewObject
+        {
+            public BlockPreviewObject BlockPreviewObject;
+            public bool IsUsed;
+        }
+        
+        public BlockPreviewObject GetObject(BlockId blockId)
+        {
+            if (!_blockPreviewObjects.ContainsKey(blockId))
+            {
+                _blockPreviewObjects.Add(blockId, new List<PreviewObject>());
+            }
+            
+            var unusedObject = _blockPreviewObjects[blockId].Find(obj => !obj.IsUsed);
+            if (unusedObject == null)
+            {
+                unusedObject = new PreviewObject
+                {
+                    BlockPreviewObject = CreatePreviewObject(blockId),
+                    IsUsed = true
+                };
+                _blockPreviewObjects[blockId].Add(unusedObject);
+            }
+            else
+            {
+                unusedObject.IsUsed = true;
+                unusedObject.BlockPreviewObject.SetActive(true);
+            }
+            
+            return unusedObject.BlockPreviewObject;
+            
+            #region Internal
+            
+            BlockPreviewObject CreatePreviewObject(BlockId id)
+            {
+                var previewBlock = ClientContext.BlockGameObjectContainer.CreatePreviewBlock(id);
+                previewBlock.transform.SetParent(_parentTransform);
+                previewBlock.transform.localPosition = Vector3.zero;
+                
+                return previewBlock;
+            }
+            
+            #endregion
+        }
+        
+        
+        public void AllUnUse()
+        {
+            foreach (var previewObjects in _blockPreviewObjects.Values)
+            {
+                foreach (var previewObject in previewObjects)
+                {
+                    previewObject.IsUsed = false;
+                    previewObject.BlockPreviewObject.SetActive(false);
+                }
+            }
+        }
+        
+        public void AllDestroy()
+        {
+            foreach (var previewObjects in _blockPreviewObjects.Values)
+            {
+                foreach (var previewObject in previewObjects)
+                {
+                    previewObject.BlockPreviewObject.Destroy();
+                }
+            }
+            
+            _blockPreviewObjects.Clear();
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.World.EventHandler/EnergyEvent/EnergyService/ElectricSegmentMergeService.cs
+```cs
+using System.Collections.Generic;
+using Game.EnergySystem;
+using Game.World.Interface.DataStore;
+
+namespace Game.World.EventHandler.EnergyEvent.EnergyService
+{
+    public static class ElectricSegmentMergeService
+    {
+        /// <summary>
+        ///     電柱に所属するセグメント同士をマージし、データストアにセットするシステム
+        /// </summary>
+        /// <param name="segmentDatastore"></param>
+        /// <param name="poles">マージしたい電柱</param>
+        /// <returns></returns>
+        public static EnergySegment MergeAndSetDatastoreElectricSegments<TSegment>(
+            IWorldEnergySegmentDatastore<TSegment> segmentDatastore, List<IElectricTransformer> poles)
+            where TSegment : EnergySegment, new()
+        {
+            //電力セグメントをリストアップ
+            var electricSegments = new List<TSegment>();
+            foreach (var pole in poles)
+            {
+                var electricSegment = segmentDatastore.GetEnergySegment(pole);
+                electricSegments.Add(electricSegment);
+            }
+            
+            //電力セグメントをマージする
+            var mergedElectricSegment = EnergySegmentExtension.Merge(electricSegments);
+            //マージ前のセグメントを削除する
+            for (var i = 0; i < electricSegments.Count; i++)
+            {
+                segmentDatastore.RemoveEnergySegment(electricSegments[i]);
+                electricSegments[i] = null;
+            }
+            
+            //マージ後のセグメントを追加する
+            segmentDatastore.SetEnergySegment(mergedElectricSegment);
+            
+            return mergedElectricSegment;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Skit/Skit/SkitCharacter.cs
+```cs
+using System.Collections.Generic;
+using Client.Skit.SkitTrack;
+using DG.Tweening;
+using UnityEngine;
+
+namespace Client.Skit.Skit
+{
+    public class SkitCharacter : MonoBehaviour
+    {
+        [SerializeField] private AudioSource voiceAudioSource;
+        [SerializeField] private SkinnedMeshRenderer faceSkinnedMeshRenderer;
+        [SerializeField] private Animator animator;
+        
+        public void Initialize(Transform parent, string name)
+        {
+            gameObject.name = name + " (StoryCharacter)";
+            transform.SetParent(parent);
+        }
+        
+        public void SetTransform(Vector3 position, Vector3 rotation)
+        {
+            transform.position = position;
+            transform.eulerAngles = rotation;
+        }
+        
+        public void PlayAnimation(string animationName)
+        {
+            animator.SetTrigger(animationName);
+        }
+        
+        public void PlayVoice(AudioClip voiceClip)
+        {
+            voiceAudioSource.clip = voiceClip;
+            voiceAudioSource.Play();
+        }
+        
+        public void StopVoice()
+        {
+            voiceAudioSource.Stop();
+        }
+        
+        public void SetEmotion(EmotionType emotion, float duration)
+        {
+            var blendShapeData = ToBlendShapeData(emotion);
+            
+            // Tween BlendShape
+            foreach (var (key, value) in blendShapeData)
+                DOTween.To(
+                    () => faceSkinnedMeshRenderer.GetBlendShapeWeight(key),
+                    x => faceSkinnedMeshRenderer.SetBlendShapeWeight(key, x),
+                    value,
+                    duration);
+            
+            #region Internal
+            
+            Dictionary<int, float> ToBlendShapeData(EmotionType emotionType)
+            {
+                return emotionType switch
+                {
+                    EmotionType.Normal => new Dictionary<int, float> { { 11, 0f } },
+                    EmotionType.Happy => new Dictionary<int, float> { { 11, 100 } },
+                };
+            }
+            
+            #endregion
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Presenter/Command/CommandUIInput.cs
+```cs
+using Client.Game.InGame.Context;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Client.Game.InGame.Presenter.Command
+{
+    public class CommandUIInput : MonoBehaviour
+    {
+        [SerializeField] private TMP_InputField commandInputField;
+        [SerializeField] private Button submitButton;
+        
+        
+        private void Start()
+        {
+            submitButton.onClick.AddListener(SubmitCommand);
+        }
+        
+        private void SubmitCommand()
+        {
+            ClientContext.VanillaApi.SendOnly.SendCommand(commandInputField.text);
+            commandInputField.text = string.Empty;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Presenter/PauseMenu/NetworkDisconnectPresenter.cs
+```cs
+using Client.Common;
+using Client.Game.InGame.Context;
+using UniRx;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+namespace Client.Game.InGame.Presenter.PauseMenu
+{
+    public class NetworkDisconnectPresenter : MonoBehaviour
+    {
+        [SerializeField] private GameObject disconnectPanel;
+        
+        [SerializeField] private Button goToMainMenuButton;
+        
+        private void Start()
+        {
+            ClientContext.VanillaApi.OnDisconnect.Subscribe(_ => { disconnectPanel.gameObject.SetActive(true); }).AddTo(this);
+            goToMainMenuButton.onClick.AddListener(() => { SceneManager.LoadScene(SceneConstant.MainMenuSceneName); });
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Entity.Interface/IEntity.cs
+```cs
+using UnityEngine;
+
+namespace Game.Entity.Interface
+{
+    public interface IEntity
+    {
+        EntityInstanceId InstanceId { get; }
+        string EntityType { get; }
+        
+        Vector3 Position { get; }
+        
+        string State { get; }
+        
+        void SetPosition(Vector3 serverVector3);
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Gear/Common/GearPower.cs
+```cs
+using UnitGenerator;
+
+namespace Game.Gear.Common
+{
+    [UnitOf(typeof(float), UnitGenerateOptions.ArithmeticOperator | UnitGenerateOptions.ValueArithmeticOperator | UnitGenerateOptions.Comparable)]
+    public partial struct GearPower
+    {
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Common/MaterialConst.cs
+```cs
+using UnityEngine;
+
+namespace Client.Common
+{
+    public class MaterialConst
+    {
+        public const string PlaceBlockAnimationMaterial = "PlaceBlockAnimation";
+        
+        public const string PreviewPlaceBlockMaterial = "PreviewPlaceBlock";
+        
+        public static readonly Color PlaceableColor = new(0.41f,0.59f,0.86f,1f);
+        public static readonly Color NotPlaceableColor = new(0.9f,0.25f,0.16f,1);
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Map.Interface/Json/MapInfoJson.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using UnityEngine;
+
+namespace Game.Map.Interface.Json
+{
+    public class MapInfoJson
+    {
+        [JsonProperty("mapObjects")] public List<MapObjectInfoJson> MapObjects;
+        [JsonProperty("mapVeins")] public List<MapVeinInfoJson> MapVeins;
+    }
+    
+    public class MapObjectInfoJson
+    {
+        [JsonProperty("instanceId")] public int InstanceId;
+        [JsonProperty("mapObjectGuid")] public string MapObjectGuidStr;
+        [JsonIgnore] public Guid MapObjectGuid => new(MapObjectGuidStr);
+        
+        [JsonProperty("x")] public float X;
+        [JsonProperty("y")] public float Y;
+        [JsonProperty("z")] public float Z;
+        
+        [JsonIgnore] public Vector3 Position => new(X, Y, Z);
+    }
+    
+    public class MapVeinInfoJson
+    {
+        [JsonProperty("veinItemGuid")] public string VeinItemGuidStr;
+        [JsonIgnore] public Guid VeinItemGuid => Guid.Parse(VeinItemGuidStr);
+        
+        [JsonProperty("xMax")] public int XMax;
+        
+        [JsonProperty("xMin")] public int XMin;
+        [JsonProperty("yMax")] public int YMax;
+        [JsonProperty("yMin")] public int YMin;
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Entity/EntityFactory.cs
+```cs
+using System.Collections.Generic;
+using Game.Entity.Interface;
+using Game.Entity.Interface.EntityInstance;
+using UnityEngine;
+
+namespace Game.Entity
+{
+    public class EntityFactory : IEntityFactory
+    {
+        public IEntity CreateEntity(string entityType, EntityInstanceId instanceId, Vector3 position = default)
+        {
+            if (entityType == VanillaEntityType.VanillaPlayer) return new PlayerEntity(instanceId, position);
+            
+            if (entityType == VanillaEntityType.VanillaItem) return new ItemEntity(instanceId, position);
+            
+            throw new KeyNotFoundException("Entity type not found : " + entityType);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.MainMenu/QuitGame.cs
+```cs
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Client.MainMenu
+{
+    public class QuitGame : MonoBehaviour
+    {
+        [SerializeField] private Button quitButton;
+        
+        private void Awake()
+        {
+            quitButton.onClick.AddListener(Application.Quit);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Server.Util/PacketBufferParser.cs
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Server.Util
+{
+    /// <summary>
+    ///     複数のパケットがバッファーに入っていた場合にそれらのパケットを別々のパケットに分割するクラス
+    /// </summary>
+    public class PacketBufferParser
+    {
+        private readonly List<byte> _packetLengthBytes = new();
+        private List<byte> _continuationFromLastTimeBytes = new();
+        
+        private bool _isGettingLength;
+        private int _nextPacketLengthOffset;
+        private int _packetLength;
+        private int _remainingHeaderLength;
+        
+        public List<List<byte>> Parse(byte[] packet, int length)
+        {
+            //プロトコル長から実際のプロトコルを作る
+            var actualStartPacketDataIndex = 0;
+            var reminderLength = length;
+            
+            var result = new List<List<byte>>();
+            
+            //受信したパケットの最後までループ
+            while (0 < reminderLength)
+            {
+                //前回からの続きのデータがない場合
+                if (_continuationFromLastTimeBytes.Count == 0)
+                {
+                    //パケット長を取得
+                    if (TryGetLength(packet, actualStartPacketDataIndex, out var payloadLength, out var headerLength))
+                    {
+                        _packetLength = payloadLength;
+                        //パケット長のshort型の4バイトを取り除く
+                        reminderLength -= _packetLength + headerLength;
+                        actualStartPacketDataIndex += headerLength;
+                    }
+                    else
+                    {
+                        //残りバッファサイズ的に取得できない場合は次回の受信で取得する
+                        break;
+                    }
+                }
+                else
+                {
+                    //前回からの続きのデータがある場合
+                    _packetLength -= _nextPacketLengthOffset;
+                    reminderLength = length - _packetLength;
+                }
+                
+                //パケットが切れているので、残りのデータを一時保存
+                if (reminderLength < 0)
+                {
+                    var addCollection = packet.Skip(actualStartPacketDataIndex).ToList();
+                    _continuationFromLastTimeBytes.AddRange(addCollection);
+                    //次回の受信のためにどこからデータを保存するかのオフセットを保存
+                    _nextPacketLengthOffset = length - actualStartPacketDataIndex;
+                    break;
+                }
+                
+                //パケットの長さ分だけデータを取得
+                for (var i = 0;
+                     i < _packetLength && actualStartPacketDataIndex < length;
+                     actualStartPacketDataIndex++, i++)
+                    _continuationFromLastTimeBytes.Add(packet[actualStartPacketDataIndex]);
+                
+                result.Add(_continuationFromLastTimeBytes);
+                //受信したパケットに対する応答を返す
+                _continuationFromLastTimeBytes = new List<byte>();
+            }
+            
+            return result;
+        }
+        
+        
+        private bool TryGetLength(byte[] bytes, int startIndex, out int payloadLength, out int headerLength)
+        {
+            List<byte> headerBytes;
+            if (_isGettingLength)
+            {
+                headerLength = _remainingHeaderLength;
+                for (var i = 0; i < _remainingHeaderLength; i++) _packetLengthBytes.Add(bytes[i]);
+                headerBytes = _packetLengthBytes;
+                _isGettingLength = false;
+            }
+            else
+            {
+                payloadLength = -1;
+                headerLength = -1;
+                //パケット長が取得でききれない場合
+                if (bytes.Length <= startIndex + 3)
+                {
+                    _packetLengthBytes.Clear();
+                    _remainingHeaderLength = 4;
+                    for (var i = startIndex; i < bytes.Length; i++)
+                    {
+                        _remainingHeaderLength = 3 - (i - startIndex);
+                        _packetLengthBytes.Add(bytes[i]);
+                    }
+                    
+                    _isGettingLength = true;
+                    return false;
+                }
+                
+                headerLength = 4;
+                headerBytes = new List<byte>
+                {
+                    bytes[startIndex],
+                    bytes[startIndex + 1],
+                    bytes[startIndex + 2],
+                    bytes[startIndex + 3],
+                };
+            }
+            
+            
+            if (BitConverter.IsLittleEndian) headerBytes.Reverse();
+            
+            payloadLength = BitConverter.ToInt32(headerBytes.ToArray(), 0);
+            return true;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.DebugSystem/CharacterTestDebug.cs
+```cs
+using System;
+using Client.Game.InGame.Control;
+using UnityEngine;
+
+namespace Client.DebugSystem
+{
+    public class CharacterTestDebug : MonoBehaviour
+    {
+        [SerializeField] private InGameCameraController _cameraController;
+        
+        private void Start()
+        {
+            _cameraController.SetControllable(true);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Input/HotBarKeyBoardComposite.cs
+```cs
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Layouts;
+using UnityEngine.InputSystem.Utilities;
+#if UNITY_EDITOR
+#endif
+
+namespace Client.Input
+{
+#if UNITY_EDITOR
+    [InitializeOnLoad]
+#endif
+    [DisplayStringFormat("{select0}/{select1}/{select2}/{select3}/{select4}/{select5}/{select6}/{select7}/{select8}")]
+    public class HotBarKeyBoardComposite : InputBindingComposite<int>
+    {
+        [InputControl(layout = "Button")] public int select0 = 1;
+        [InputControl(layout = "Button")] public int select1 = 2;
+        [InputControl(layout = "Button")] public int select2 = 3;
+        [InputControl(layout = "Button")] public int select3 = 4;
+        [InputControl(layout = "Button")] public int select4 = 5;
+        [InputControl(layout = "Button")] public int select5 = 6;
+        [InputControl(layout = "Button")] public int select6 = 7;
+        [InputControl(layout = "Button")] public int select7 = 8;
+        [InputControl(layout = "Button")] public int select8 = 9;
+#if UNITY_EDITOR
+        static HotBarKeyBoardComposite()
+        {
+            Initialize();
+        }
+#endif
+        
+        [RuntimeInitializeOnLoadMethod]
+        private static void Initialize()
+        {
+            InputSystem.RegisterBindingComposite<HotBarKeyBoardComposite>();
+        }
+        
+        public override int ReadValue(ref InputBindingCompositeContext context)
+        {
+            if (context.ReadValueAsButton(select0)) return select0;
+            if (context.ReadValueAsButton(select1)) return select1;
+            if (context.ReadValueAsButton(select2)) return select2;
+            if (context.ReadValueAsButton(select3)) return select3;
+            if (context.ReadValueAsButton(select4)) return select4;
+            if (context.ReadValueAsButton(select5)) return select5;
+            if (context.ReadValueAsButton(select6)) return select6;
+            if (context.ReadValueAsButton(select7)) return select7;
+            if (context.ReadValueAsButton(select8)) return select8;
+            
+            return 0;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/IWorldSettingsDatastore.cs
+```cs
+using UnityEngine;
+
+namespace Game.World.Interface.DataStore
+{
+    public interface IWorldSettingsDatastore
+    {
+        public Vector3Int WorldSpawnPoint { get; }
+        
+        public WorldSettingJsonObject GetSaveJsonObject();
+        public void Initialize();
+        public void LoadSettingData(WorldSettingJsonObject worldSettingJsonObject);
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Network/API/VanillaApiEvent.cs
+```cs
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using Client.Network.Settings;
+using Cysharp.Threading.Tasks;
+using Server.Protocol;
+using Server.Protocol.PacketResponse;
+using UnityEngine;
+
+namespace Client.Network.API
+{
+    public class VanillaApiEvent
+    {
+        private readonly Dictionary<string, Action<byte[]>> _eventResponseInfos = new();
+        private readonly PacketExchangeManager _packetExchangeManager;
+        private readonly PlayerConnectionSetting _playerConnectionSetting;
+        
+        public VanillaApiEvent(PacketExchangeManager packetExchangeManager, PlayerConnectionSetting playerConnectionSetting)
+        {
+            _packetExchangeManager = packetExchangeManager;
+            _playerConnectionSetting = playerConnectionSetting;
+            CollectEvent().Forget();
+        }
+        
+        private async UniTask CollectEvent()
+        {
+            while (true)
+            {
+                var ct = new CancellationTokenSource().Token;
+                
+                try
+                {
+                    await RequestAndParse(ct);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Event Protocol Error:{e.Message}\n{e.StackTrace}");
+                }
+                
+                await UniTask.Delay(ServerConst.PollingRateMillSec, cancellationToken: ct);
+            }
+            
+            #region Internal
+            
+            async UniTask RequestAndParse(CancellationToken ct)
+            {
+                var request = new EventProtocolMessagePack(_playerConnectionSetting.PlayerId);
+                
+                var response = await _packetExchangeManager.GetPacketResponse<ResponseEventProtocolMessagePack>(request, ct);
+                
+                foreach (var eventMessagePack in response.Events)
+                    if (_eventResponseInfos.TryGetValue(eventMessagePack.Tag, out var action))
+                        action(eventMessagePack.Payload);
+            }
+            
+            #endregion
+        }
+        
+        public void RegisterEventResponse(string tag, Action<byte[]> responseAction)
+        {
+            _eventResponseInfos.Add(tag, responseAction);
+        }
+        
+        public void UnRegisterEventResponse(string tag)
+        {
+            _eventResponseInfos.Remove(tag);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Block/RendererMaterialReplacerController.cs
+```cs
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Client.Game.InGame.Block
+{
+    public class RendererMaterialReplacerController
+    {
+        private readonly List<RendererMaterialReplacer> _rendererMaterialReplacers;
+        
+        public RendererMaterialReplacerController(GameObject targetObject)
+        {
+            _rendererMaterialReplacers = new List<RendererMaterialReplacer>();
+            foreach (var renderer in targetObject.GetComponentsInChildren<Renderer>())
+            {
+                _rendererMaterialReplacers.Add(new RendererMaterialReplacer(renderer));
+            }
+        }
+        
+        public void CopyAndSetMaterial(Material placeMaterial)
+        {
+            _rendererMaterialReplacers.ForEach(replacer => replacer.CopyAndSetMaterial(placeMaterial));
+        }
+        
+        public void SetPlaceMaterialProperty(string propertyName, float value)
+        {
+            _rendererMaterialReplacers.ForEach(replacer => replacer.SetPlaceMaterialProperty(propertyName, value));
+        }
+        
+        public void SetColor(Color color)
+        {
+            _rendererMaterialReplacers.ForEach(replacer => replacer.SetColor(color));
+        }
+        
+        public void ResetMaterial()
+        {
+            _rendererMaterialReplacers.ForEach(replacer => replacer.ResetMaterial());
+        }
+        
+        public void DestroyMaterial()
+        {
+            _rendererMaterialReplacers.ForEach(replacer => replacer.DestroyMaterial());
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/Extension/BlockMasterExtension.cs
+```cs
+using System;
+using Core.Master;
+
+namespace Game.Block.Interface.Extension
+{
+    public static class BlockMasterExtension
+    {
+        public static BlockId GetVerticalOverrideBlockId(this BlockId blockId,BlockVerticalDirection verticalDirection)
+        {
+            var blockElement = MasterHolder.BlockMaster.GetBlockMaster(blockId);
+            var overrideBlock = blockElement.OverrideVerticalBlock;
+            if (overrideBlock == null)
+            {
+                return blockId;
+            }
+            
+            if (verticalDirection is BlockVerticalDirection.Up && overrideBlock.UpBlockGuid != Guid.Empty)
+            {
+                return MasterHolder.BlockMaster.GetBlockId(overrideBlock.UpBlockGuid);
+            }
+            if (verticalDirection is BlockVerticalDirection.Horizontal && overrideBlock.HorizontalBlockGuid != Guid.Empty)
+            {
+                return MasterHolder.BlockMaster.GetBlockId(overrideBlock.HorizontalBlockGuid);
+            }
+            if (verticalDirection is  BlockVerticalDirection.Down && overrideBlock.DownBlockGuid != Guid.Empty)
+            {
+                return MasterHolder.BlockMaster.GetBlockId(overrideBlock.DownBlockGuid);
+            }
+            
+            return blockId;
+        }
+        
+        public static BlockId GetVerticalOverrideBlockId(this Guid blockGuid,BlockVerticalDirection verticalDirection)
+        {
+            var blockId = MasterHolder.BlockMaster.GetBlockId(blockGuid);
+            return blockId.GetVerticalOverrideBlockId(verticalDirection);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Define/BlockPrefabContainer.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Client.Common;
+using Core.Const;
+using Core.Master;
+using Game.Context;
+using Mooresmaster.Model.BlocksModule;
+using UnityEngine;
+
+namespace Client.Game.InGame.Define
+{
+    [CreateAssetMenu(fileName = "BlockPrefabContainer", menuName = "moorestech/BlockPrefabContainer", order = 0)]
+    public class BlockPrefabContainer : ScriptableObject
+    {
+        [SerializeField] private List<BlockPrefabInfo> blockPrefabs;
+        
+        public Dictionary<BlockId,BlockObjectInfo> GetBlockDataList()
+        {
+            var result = new Dictionary<BlockId,BlockObjectInfo>();
+            
+            foreach (var blockId in MasterHolder.BlockMaster.GetBlockIds())
+            {
+                var blockMasterElement = MasterHolder.BlockMaster.GetBlockMaster(blockId);
+                
+                var blockPrefab = GetBlockPrefab(blockMasterElement.BlockGuid);
+                if (blockPrefab == null) continue;
+                
+                result.Add(blockId, new BlockObjectInfo(blockPrefab, blockMasterElement));
+            }
+            
+            return result;
+        }
+        
+        private GameObject GetBlockPrefab(Guid blockGuid)
+        {
+            foreach (var blockPrefab in blockPrefabs)
+                if (blockPrefab.BlockGuid == blockGuid.ToString())
+                    return blockPrefab.BlockPrefab;
+            return null;
+        }
+    }
+    
+    [Serializable]
+    public class BlockPrefabInfo
+    {
+        public string BlockGuid => blockGuid;
+        public GameObject BlockPrefab => blockPrefab;
+        
+        [SerializeField] private string blockGuid;
+        [SerializeField] private GameObject blockPrefab;
+    }
+    
+    
+    
+    public class BlockObjectInfo
+    {
+        public readonly BlockMasterElement BlockMasterElement;
+        public readonly GameObject BlockObject;
+        
+        public BlockObjectInfo(GameObject blockObject, BlockMasterElement blockMasterElement)
+        {
+            BlockObject = blockObject;
+            BlockMasterElement = blockMasterElement;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Entity.Interface/IEntitiesDatastore.cs
+```cs
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Game.Entity.Interface
+{
+    public interface IEntitiesDatastore
+    {
+        public void Add(IEntity entity);
+        public bool Exists(EntityInstanceId instanceId);
+        public IEntity Get(EntityInstanceId instanceId);
+        
+        public void SetPosition(EntityInstanceId instanceId, Vector3 position);
+        
+        public Vector3 GetPosition(EntityInstanceId instanceId);
+        
+        
+        public List<EntityJsonObject> GetSaveJsonObject();
+        public void LoadBlockDataList(List<EntityJsonObject> saveBlockDataList);
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/BlockException.cs
+```cs
+using System;
+using Game.Block.Interface.Component;
+
+namespace Game.Block.Interface
+{
+    public static class BlockException
+    {
+        private const string IsDestroyed = "This component is already destroyed";
+        private static readonly InvalidOperationException IsDestroyedException = new(IsDestroyed);
+        
+        public static void CheckDestroy(IBlockComponent blockComponent)
+        {
+            if (blockComponent.IsDestroy)
+            {
+                throw IsDestroyedException;
+            }
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/UI/UIState/UIStateDictionary.cs
+```cs
+using System.Collections.Generic;
+
+namespace Client.Game.InGame.UI.UIState
+{
+    public class UIStateDictionary
+    {
+        private readonly Dictionary<UIStateEnum, IUIState> _stateDictionary = new();
+        
+        public UIStateDictionary(
+            GameScreenState gameScreenState,
+            PlayerInventoryState playerInventoryState,
+            BlockInventoryState blockInventoryState,
+            PauseMenuState pauseMenuState,
+            DeleteBlockState deleteBlockState,
+            SkitState skitState,
+            PlaceBlockState placeBlockState)
+        {
+            _stateDictionary.Add(UIStateEnum.GameScreen, gameScreenState);
+            _stateDictionary.Add(UIStateEnum.PlayerInventory, playerInventoryState);
+            _stateDictionary.Add(UIStateEnum.BlockInventory, blockInventoryState);
+            _stateDictionary.Add(UIStateEnum.PauseMenu, pauseMenuState);
+            _stateDictionary.Add(UIStateEnum.DeleteBar, deleteBlockState);
+            _stateDictionary.Add(UIStateEnum.Story, skitState);
+            _stateDictionary.Add(UIStateEnum.PlaceBlock, placeBlockState);
+        }
+        
+        public IUIState GetState(UIStateEnum state)
+        {
+            return _stateDictionary[state];
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Gear/Common/GearStateData.cs
+```cs
+using MessagePack;
+
+namespace Game.Gear.Common
+{
+    [MessagePackObject]
+    public class GearStateData
+    {
+        public GearStateData(float currentRpm, bool isClockwise)
+        {
+            CurrentRpm = currentRpm;
+            IsClockwise = isClockwise;
+        }
+        
+        [Key(0)] public float CurrentRpm { get; set; }
+        
+        [Key(1)] public bool IsClockwise { get; set; }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/Skit/Starter/StartSkitUI.cs
+```cs
+using UnityEngine;
+
+namespace Client.Game.Skit.Starter
+{
+    public class StartSkitUI : MonoBehaviour
+    {
+        [SerializeField] private GameObject startStoryPanel;
+        
+        public void ShowStartStoryUI(bool enable)
+        {
+            startStoryPanel.SetActive(enable);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IUpdatableBlockComponent.cs
+```cs
+namespace Game.Block.Interface.Component
+{
+    public interface IUpdatableBlockComponent : IBlockComponent
+    {
+        public void Update();
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Entity.Interface/EntityInstance/PlayerEntity.cs
+```cs
+using UnityEngine;
+
+namespace Game.Entity.Interface.EntityInstance
+{
+    public class PlayerEntity : IEntity
+    {
+        public PlayerEntity(EntityInstanceId instanceId, Vector3 position)
+        {
+            InstanceId = instanceId;
+            Position = position;
+        }
+        
+        public Vector3 Position { get; private set; }
+        
+        public EntityInstanceId InstanceId { get; }
+        public string EntityType => VanillaEntityType.VanillaPlayer;
+        public string State => string.Empty;
+        
+        public void SetPosition(Vector3 serverVector3)
+        {
+            Position = serverVector3;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.World/WorldBlockUpdateEvent.cs
+```cs
+using System;
+using Game.Block.Interface.Extension;
+using Game.World.Interface.DataStore;
+using UniRx;
+using UnityEngine;
+
+namespace Game.World
+{
+    public class WorldBlockUpdateEvent : IWorldBlockUpdateEvent
+    {
+        private readonly Subject<BlockUpdateProperties> _onBlockPlaceEvent = new();
+        private readonly Subject<BlockUpdateProperties> _onBlockRemoveEvent = new();
+        public IObservable<BlockUpdateProperties> OnBlockPlaceEvent => _onBlockPlaceEvent;
+        
+        public IObservable<BlockUpdateProperties> OnBlockRemoveEvent => _onBlockRemoveEvent;
+        
+        public IDisposable SubscribePlace(Vector3Int subscribePos, Action<BlockUpdateProperties> blockPlaceEvent)
+        {
+            return _onBlockPlaceEvent.Subscribe(data =>
+            {
+                if (data.BlockData.BlockPositionInfo.IsContainPos(subscribePos)) blockPlaceEvent(new BlockUpdateProperties(subscribePos, data.BlockData));
+            });
+        }
+        
+        public IDisposable SubscribeRemove(Vector3Int subscribePos, Action<BlockUpdateProperties> blockPlaceEvent)
+        {
+            return _onBlockRemoveEvent.Subscribe(data =>
+            {
+                if (data.BlockData.BlockPositionInfo.IsContainPos(subscribePos)) blockPlaceEvent(new BlockUpdateProperties(subscribePos, data.BlockData));
+            });
+        }
+        
+        public void OnBlockPlaceEventInvoke(Vector3Int pos, WorldBlockData worldBlockData)
+        {
+            _onBlockPlaceEvent.OnNext(new BlockUpdateProperties(pos, worldBlockData));
+        }
+        
+        public void OnBlockRemoveEventInvoke(Vector3Int pos, WorldBlockData worldBlockData)
+        {
+            _onBlockRemoveEvent.OnNext(new BlockUpdateProperties(pos, worldBlockData));
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IBlockStateChange.cs
+```cs
+using System;
+using Game.Block.Interface.ComponentAttribute;
+using Game.Block.Interface.State;
+
+namespace Game.Block.Interface.Component
+{
+    [DisallowMultiple]
+    public interface IBlockStateChange : IBlockComponent
+    {
+        public IObservable<BlockState> OnChangeBlockState { get; }
+        public BlockState GetBlockState();
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Block/BlockGameObjectChild.cs
+```cs
+using UnityEngine;
+
+namespace Client.Game.InGame.Block
+{
+    public class BlockGameObjectChild : MonoBehaviour
+    {
+        public BlockGameObject BlockGameObject { get; private set; }
+        
+        public void Init(BlockGameObject blockGameObject)
+        {
+            BlockGameObject = blockGameObject;
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.DebugSystem/DebugSheetController.cs
+```cs
+using IngameDebugConsole;
+using Tayx.Graphy;
+using UnityDebugSheet.Runtime.Core.Scripts;
+using UnityDebugSheet.Runtime.Extensions.Graphy;
+using UnityDebugSheet.Runtime.Extensions.IngameDebugConsole;
+using UnityEngine;
+
+namespace Client.DebugSystem
+{
+    public sealed class DebugSheetController : MonoBehaviour
+    {
+        [SerializeField] private GameObject runtimeHierarchyInspector;
+        [SerializeField] private DebugSheet debugSheet;
+        
+        private void Start()
+        {
+            debugSheet.gameObject.SetActive(true);
+            
+            var rootPage = debugSheet.GetOrCreateInitialPage();
+            
+            rootPage.AddPageLinkButton<ItemGetDebugSheet>("Get Item");
+            rootPage.AddPageLinkButton<IngameDebugConsoleDebugPage>("In-Game Debug Console", onLoad: x => x.page.Setup(DebugLogManager.Instance));
+            rootPage.AddPageLinkButton<GraphyDebugPage>("Graphy", onLoad: x => x.page.Setup(GraphyManager.Instance));
+            rootPage.AddSwitch(false, "Runtime Hierarchy Inspector", valueChanged: active => runtimeHierarchyInspector.SetActive(active));
+        }
+        
+        
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        public static void CreateDebugger()
+        {
+            var prefab = Resources.Load<GameObject>("moorestech Debug Objects");
+            Instantiate(prefab);
+        }
+    }
+}
+```
+
+moorestech_client/Assets/Scripts/Client.Game/InGame/Control/UICursorFollowControl.cs
+```cs
+using UnityEngine;
+
+namespace Client.Game.InGame.Control
+{
+    public class UICursorFollowControl : MonoBehaviour
+    {
+        [SerializeField] private Vector3 offSet = Vector3.zero;
+        private RectTransform _canvasRect;
+        
+        private void Start()
+        {
+            _canvasRect = transform.root.GetComponentsInChildren<RectTransform>()[0];
+        }
+        
+        private void Update()
+        {
+            var magnification = _canvasRect.sizeDelta.x / Screen.width;
+            
+            var itemPos = new Vector3();
+            
+            itemPos.x = UnityEngine.Input.mousePosition.x * magnification - _canvasRect.sizeDelta.x / 2;
+            itemPos.y = UnityEngine.Input.mousePosition.y * magnification - _canvasRect.sizeDelta.y / 2;
+            itemPos.z = transform.localPosition.z;
+            
+            transform.localPosition = itemPos + offSet;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IBlockSaveState.cs
+```cs
+using Game.Block.Interface.ComponentAttribute;
+
+namespace Game.Block.Interface.Component
+{
+    [DisallowMultiple]
+    public interface IBlockSaveState : IBlockComponent
+    {
+        string GetSaveState();
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.SaveLoad.Interface/IWorldSaveDataSaver.cs
+```cs
+namespace Game.SaveLoad.Interface
+{
+    public interface IWorldSaveDataSaver
+    {
+        public void Save();
+    }
+}
+```
+
+
+# System Prompt
+
+上記のコードを参考に、下記の指示に従ってください。ただし、これら上記のコードはユーザーからは表示されていません。そのため、指示に従う際は具体的にどのクラスを指しているのかクラス名を交え、moorestechを知らない人でもわかりやすい説明を作るように心がけてください。
+
+# Instructions
+CraftInventoryViewクラスを参考に、MachineRecipeViewクラスの実装されていないメソッドを実装してください。
