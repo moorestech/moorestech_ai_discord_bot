@@ -70,7 +70,7 @@ def cos_sim(v1, v2):
     return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
 
 
-def search_embedding(query, count=10):
+def search_embedding(query, count=10, force_include_file_name=[]):
     moorestech_embedding = json.load(open(EMBEDDING_PATH, 'r', encoding='utf-8'))
 
     client = OpenAI()
@@ -87,6 +87,12 @@ def search_embedding(query, count=10):
     for embedding in moorestech_embedding:
         similarity = cos_sim(q_embeddings, embedding['embedding'])
 
+        # force_include_classで指定されている名前がクラス名に含まれている場合はsimilarityを1にする
+        for file_name in force_include_file_name:
+            if file_name in embedding['file_name']:
+                similarity = 1
+                break
+
         results.append({
             'cs_data': embedding,
             'similarity': similarity
@@ -98,8 +104,8 @@ def search_embedding(query, count=10):
     return results[:count]
 
 
-def create_rag_prompt(query, token_limit=5000):
-    results = search_embedding(query, 10000)
+def create_rag_prompt(query, token_limit=5000, force_include_file_name=[]):
+    results = search_embedding(query, 10000, force_include_file_name)
     current_token_count = 0
     rag_cs_data = []
 
@@ -123,5 +129,7 @@ def create_rag_prompt(query, token_limit=5000):
         current_rag += "```cs\n" + cs_data['content'] + "\n```\n\n"
 
         rag_prompt = rag_prompt + current_rag
+
+        print("Rag File: ", cs_data['file_name'])
 
     return rag_prompt
