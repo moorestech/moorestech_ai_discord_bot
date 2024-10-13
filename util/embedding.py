@@ -114,11 +114,14 @@ def create_rag_prompt(query, token_limit=5000):
         rag_cs_data.append(cs_data)
         current_token_count += content_token_count + relative_path_token_count
 
+    # プロンプトの最後の方がより関係する情報なので逆順にする
+    rag_cs_data.reverse()
+
     rag_prompt = ""
     for cs_data in rag_cs_data:
         current_rag = cs_data['relative_path'] + "\n"
         current_rag += "```cs\n" + cs_data['content'] + "\n```\n\n"
 
-        rag_prompt = current_rag + rag_prompt
+        rag_prompt = rag_prompt + current_rag
 
     return rag_prompt

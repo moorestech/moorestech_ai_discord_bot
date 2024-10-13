@@ -5,7 +5,10 @@ from util import embedding
 # ベクトル化されたファイルを更新
 embedding.update_embedding()
 
-usr_prompt = "他のSaveLoadTestを参考に、ElectricMinerとGearMinerのSaveLoadTestを作成してください。"
+usr_prompt = ""
+# query_o1_prompt.txtをロード
+with open("manual/query_o1_prompt.txt", "r", encoding="utf-8") as f:
+    usr_prompt = f.read()
 
 prompt = embedding.create_rag_prompt(usr_prompt, token_limit=24000)
 

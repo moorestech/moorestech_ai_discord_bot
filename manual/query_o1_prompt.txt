@@ -1,0 +1,17 @@
+ブロックを破壊したとき、以下のようなエラーが発生しました。
+このエラーの原因と対処法を教えてください。
+
+```cs
+InvalidOperationException: This component is already destroyed
+Game.Block.Interface.BlockException.CheckDestroy (Game.Block.Interface.Component.IBlockComponent blockComponent) (at Assets/Scripts/Game.Block.Interface/BlockException.cs:15)
+Game.Block.Blocks.Miner.VanillaMinerProcessorComponent.Update () (at Assets/Scripts/Game.Block/Blocks/Miner/VanillaMinerProcessorComponent.cs:120)
+Game.Block.Blocks.BlockSystem.Update () (at Assets/Scripts/Game.Block/Blocks/BlockSystem.cs:67)
+Game.Block.Blocks.BlockSystem.<.ctor>b__23_1 (UniRx.Unit _) (at Assets/Scripts/Game.Block/Blocks/BlockSystem.cs:50)
+UniRx.Observer+Subscribe`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/Observer.cs:165)
+UniRx.InternalUtil.ListObserver`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/InternalUtil/ListObserver.cs:39)
+UniRx.Subject`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/Subjects/Subject.cs:62)
+Core.Update.GameUpdater.Update () (at Assets/Scripts/Core.Update/GameUpdater.cs:20)
+ServerStarter.FixedUpdate () (at Assets/ServerStarter.cs:20)
+```
+
+関連クラス: GameUpdater
