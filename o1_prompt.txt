@@ -1,3348 +1,1773 @@
-moorestech_server/Assets/Scripts/Game.Gear/Common/RPM.cs
+moorestech_server/Assets/Scripts/Tests/UnitTest/Game/SaveLoad/BeltConveyorSaveLoadTest.cs
 ```cs
-// ReSharper disable InconsistentNaming
-
-using UnitGenerator;
-
-namespace Game.Gear.Common
-{
-    [UnitOf(typeof(float), UnitGenerateOptions.ArithmeticOperator | UnitGenerateOptions.ValueArithmeticOperator | UnitGenerateOptions.Comparable)]
-    public partial struct RPM
-    {
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Paths/CalcFileHash.cs
-```cs
-using System;
-using System.IO;
-using System.Security.Cryptography;
-
-namespace Game.Paths
-{
-    public static class CalcFileHash
-    {
-        public static string GetSha1Hash(string filePath)
-        {
-            using var sha1 = new SHA1Managed();
-            using var stream = File.OpenRead(filePath);
-            var hash = sha1.ComputeHash(stream);
-            return BitConverter.ToString(hash).Replace("-", string.Empty);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Common/GameObjectExtension.cs
-```cs
-using UnityEngine;
-
-namespace Client.Common
-{
-    public static class GameObjectExtension
-    {
-        public static string GetFullPath(this GameObject obj)
-        {
-            return GetFullPath(obj.transform);
-        }
-        
-        public static string GetFullPath(this Transform t)
-        {
-            var path = t.name;
-            var parent = t.parent;
-            while (parent)
-            {
-                path = $"{parent.name}/{path}";
-                parent = parent.parent;
-            }
-            
-            return path;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Editor/SchemaWatcher.cs
-```cs
-
-```
-
-moorestech_server/Assets/Scripts/Server.Util/ToByteList.cs
-```cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace Server.Util
-{
-    public static class ToByteList
-    {
-        public static List<byte> Convert(int sendData)
-        {
-            var result = BitConverter.GetBytes(sendData);
-            if (BitConverter.IsLittleEndian)
-                Array.Reverse(result);
-            return result.ToList();
-        }
-        
-        public static List<byte> Convert(short sendData)
-        {
-            var result = BitConverter.GetBytes(sendData);
-            if (BitConverter.IsLittleEndian)
-                Array.Reverse(result);
-            return result.ToList();
-        }
-        
-        public static List<byte> Convert(float sendData)
-        {
-            var result = BitConverter.GetBytes(sendData);
-            if (BitConverter.IsLittleEndian)
-                Array.Reverse(result);
-            return result.ToList();
-        }
-        
-        public static List<byte> Convert(string sendData)
-        {
-            return Encoding.UTF8.GetBytes(sendData).ToList();
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests.Module/TestMod/TestModDirectory.cs
-```cs
-using System;
-using System.IO;
-
-namespace Tests.Module.TestMod
-{
-    public class TestModDirectory
-    {
-        private static string FolderDirectory => Path.Combine(Environment.CurrentDirectory, "../", "moorestech_server", "Assets", "Scripts", "", "Tests.Module", "TestMod");
-        
-        public static string ConfigOnlyDirectory => Path.Combine(FolderDirectory, "ConfigOnly");
-        public static string ForUnitTestModDirectory => Path.Combine(FolderDirectory, "ForUnitTest");
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Paths/GameSystemPaths.cs
-```cs
-using System;
-using System.IO;
-using System.Runtime.InteropServices;
-
-namespace Game.Paths
-{
-    public static class GameSystemPaths
-    {
-        public static string GameSystemDirectory
-        {
-            get
-            {
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                    return DirectoryCreator("C:\\Users", Environment.UserName, "AppData", "Roaming", ".moorestech");
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                    return DirectoryCreator("/Users", Environment.UserName, "Library", "Application Support",
-                        "moorestech");
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                    return DirectoryCreator("/home", Environment.UserName, ".moorestech");
-                throw new Exception("Unsupported OS");
-            }
-        }
-        
-        public static string TmpFileDirectory => DirectoryCreator(GameSystemDirectory, "tmp");
-        public static string ExtractedModDirectory => DirectoryCreator(TmpFileDirectory, "extracted_mods");
-        public static string SaveFileDirectory => DirectoryCreator(GameSystemDirectory, "saves");
-        
-        public static string GetExtractedModDirectory(string folderName)
-        {
-            return DirectoryCreator(ExtractedModDirectory, folderName);
-        }
-        
-        public static string GetSaveFilePath(string fileName)
-        {
-            return Path.Combine(SaveFileDirectory, fileName);
-        }
-        
-        
-        private static string DirectoryCreator(params string[] paths)
-        {
-            var directory = Path.Combine(paths);
-            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-            return directory;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Server.Protocol/PacketResponse/IPacketResponse.cs
-```cs
-using System.Collections.Generic;
-
-namespace Server.Protocol.PacketResponse
-{
-    public interface IPacketResponse
-    {
-        public ProtocolMessagePackBase GetResponse(List<byte> payload);
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Network/Settings/ConnectionServerConfig.cs
-```cs
-namespace Client.Network.Settings
-{
-    public class ConnectionServerConfig
-    {
-        public readonly string IP;
-        public readonly int Port;
-        
-        public ConnectionServerConfig(string ip, int port)
-        {
-            IP = ip;
-            Port = port;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Paths/StringExtension.cs
-```cs
-namespace Game.Paths
-{
-    public static class StringExtension
-    {
-        public static string ReplaceFileNotAvailableCharacter(this string fileName, string replace)
-        {
-            fileName = fileName.Replace("/", replace);
-            fileName = fileName.Replace("\\", replace);
-            fileName = fileName.Replace(" ", replace);
-            fileName = fileName.Replace(":", replace);
-            fileName = fileName.Replace("*", replace);
-            fileName = fileName.Replace("?", replace);
-            fileName = fileName.Replace("\"", replace);
-            fileName = fileName.Replace("<", replace);
-            fileName = fileName.Replace(">", replace);
-            fileName = fileName.Replace("|", replace);
-            fileName = fileName.Replace(".", replace);
-            return fileName;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Extension/BlockPositionInfoExtension.cs
-```cs
-using UnityEngine;
-
-namespace Game.Block.Interface.Extension
-{
-    public static class BlockPositionInfoExtension
-    {
-        public static bool IsContainPos(this BlockPositionInfo self, Vector3Int pos)
-        {
-            return self.MinPos.x <= pos.x && pos.x <= self.MaxPos.x &&
-                   self.MinPos.y <= pos.y && pos.y <= self.MaxPos.y &&
-                   self.MinPos.z <= pos.z && pos.z <= self.MaxPos.z;
-        }
-        
-        public static bool IsOverlap(this BlockPositionInfo self, BlockPositionInfo other)
-        {
-            return self.MinPos.x <= other.MaxPos.x && other.MinPos.x <= self.MaxPos.x &&
-                   self.MinPos.y <= other.MaxPos.y && other.MinPos.y <= self.MaxPos.y &&
-                   self.MinPos.z <= other.MaxPos.z && other.MinPos.z <= self.MaxPos.z;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Server.Protocol/ServerConst.cs
-```cs
-namespace Server.Protocol
-{
-    public class ServerConst
-    {
-        public const int PollingRateMillSec = 100;
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Common/SceneConstant.cs
-```cs
-namespace Client.Common
-{
-    public class SceneConstant
-    {
-        public const string MainMenuSceneName = "MainMenu";
-        public const string GameInitializerSceneName = "GameInitialaizer";
-        public const string MainGameSceneName = "MainGame";
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Network/Settings/PlayerConnectionSetting.cs
-```cs
-namespace Client.Network.Settings
-{
-    public class PlayerConnectionSetting
-    {
-        public readonly int PlayerId;
-        
-        public PlayerConnectionSetting(int playerId)
-        {
-            PlayerId = playerId;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/EmotionType.cs
-```cs
-namespace Client.Skit.SkitTrack
-{
-    public enum EmotionType
-    {
-        Normal,
-        Happy,
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Common/BlockConstant.cs
-```cs
+using System.Reflection;
+using Core.Item.Interface;
 using Core.Master;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Component;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Mooresmaster.Model.BlocksModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
 
-namespace Client.Common
+namespace Tests.UnitTest.Game.SaveLoad
 {
-    public static class BlockConstant
+    public class BeltConveyorSaveLoadTest
     {
-        public static readonly BlockId NullBlockId = new(0);
+        [Test]
+        public void SaveLoadTest()
+        {
+            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var blockFactory = ServerContext.BlockFactory;
+            var beltPosInfo = new BlockPositionInfo(new Vector3Int(0, 0), BlockDirection.North, Vector3Int.one);
+            var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(1), beltPosInfo);
+            
+            var belt = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            //リフレクションで_inventoryItemsを取得
+            var inventoryItemsField = typeof(VanillaBeltConveyorComponent).GetField("_inventoryItems", BindingFlags.NonPublic | BindingFlags.Instance);
+            var inventoryItems = (BeltConveyorInventoryItem[])inventoryItemsField.GetValue(belt);
+            
+            var timeOfItemEnterToExit = ((BeltConveyorBlockParam)beltConveyor.BlockMasterElement.BlockParam).TimeOfItemEnterToExit;
+            //アイテムを設定
+            inventoryItems[0] = new BeltConveyorInventoryItem(new ItemId(1), new ItemInstanceId(0))
+            {
+                RemainingPercent = 0.3f,
+            };
+            inventoryItems[2] = new BeltConveyorInventoryItem(new ItemId(2), new ItemInstanceId(0))
+            {
+                RemainingPercent = 0.5f,
+            };
+            inventoryItems[3] = new BeltConveyorInventoryItem(new ItemId(5), new ItemInstanceId(0))
+            {
+                RemainingPercent = 1f,
+            };
+            
+            
+            //セーブデータ取得
+            var str = belt.GetSaveState();
+            Debug.Log(str);
+            
+            
+            //セーブデータをロード
+            var blockConnector = new BlockConnectorComponent<IBlockInventory>(null, null, beltPosInfo);
+            var newBelt = new VanillaBeltConveyorComponent(str, 4, 4000, blockConnector, "");
+            var newInventoryItems = (BeltConveyorInventoryItem[])inventoryItemsField.GetValue(newBelt);
+            
+            //アイテムが一致するかチェック
+            Assert.AreEqual(inventoryItems.Length, newInventoryItems.Length);
+            Assert.AreEqual(1, newInventoryItems[0].ItemId.AsPrimitive());
+            Assert.AreEqual(0.3f, newInventoryItems[0].RemainingPercent);
+            Assert.AreEqual(2, newInventoryItems[2].ItemId.AsPrimitive());
+            Assert.AreEqual(0.5f, newInventoryItems[2].RemainingPercent);
+            Assert.AreEqual(5, newInventoryItems[3].ItemId.AsPrimitive());
+            Assert.AreEqual(1f, newInventoryItems[3].RemainingPercent);
+        }
     }
 }
 ```
 
-moorestech_client/Assets/Scripts/Client.Common/Server/NetworkConst.cs
+moorestech_server/Assets/Scripts/Tests/UnitTest/Game/SaveLoad/MachineSaveLoadTest.cs
 ```cs
-namespace Client.Common.Server
+using System.Reflection;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Machine;
+using Game.Block.Blocks.Machine.Inventory;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.PlayerInventory;
+using Game.SaveLoad.Interface;
+using Game.SaveLoad.Json;
+using Game.World.Interface.DataStore;
+using Microsoft.Extensions.DependencyInjection;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+using Assert = UnityEngine.Assertions.Assert;
+
+namespace Tests.UnitTest.Game.SaveLoad
 {
-    public class NetworkConst
+    public class MachineSaveLoadTest
     {
-        public const int UpdateRate = 2;
-        public const int UpdateIntervalMilliseconds = 1000 / UpdateRate;
-        public const float UpdateIntervalSeconds = 1.0f / UpdateRate;
+        //インベントリのあるブロックを追加した時のテスト
+        //レシピやブロックが変わった時はテストコードを修正してください
+        [Test]
+        public void InventoryBlockTest()
+        {
+            //機械の追加
+            var (blockFactory, worldBlockDatastore, _, assembleSaveJsonText, _) = CreateBlockTestModule();
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.MachineId , new Vector3Int(0, 0), BlockDirection.North, out var machineBlock);
+            var machineInventory = machineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            
+            
+            //レシピ用のアイテムを追加
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(1), 3));
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 1));
+            //処理を開始
+            GameUpdater.UpdateWithWait();
+            //別のアイテムを追加
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(5), 6));
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 4));
+            
+            //リフレクションで機械の状態を設定
+            //機械のレシピの残り時間設定
+            var vanillaMachineProcessor = machineBlock.GetComponent<VanillaMachineProcessorComponent>();
+            //ステータスをセット
+            typeof(VanillaMachineProcessorComponent)
+                .GetProperty("RemainingSecond")
+                .SetValue(vanillaMachineProcessor, 0.3);
+            typeof(VanillaMachineProcessorComponent)
+                .GetProperty("CurrentState")
+                .SetValue(vanillaMachineProcessor, ProcessState.Processing);
+            
+            //機械のアウトプットスロットの設定
+            var outputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(machineInventory);
+            
+            outputInventory.SetItem(1, itemStackFactory.Create(new ItemId(1), 1));
+            outputInventory.SetItem(2, itemStackFactory.Create(new ItemId(3), 2));
+            
+            //レシピIDを取得
+            var recipeId = vanillaMachineProcessor.RecipeGuid;
+            
+            var json = assembleSaveJsonText.AssembleSaveJson();
+            Debug.Log(json);
+            //配置したブロックを削除
+            worldBlockDatastore.RemoveBlock(new Vector3Int(0, 0));
+            
+            
+            //ロードした時に機械の状態が正しいことを確認
+            var (_, loadWorldBlockDatastore, _, _, loadJsonFile) = CreateBlockTestModule();
+            
+            loadJsonFile.Load(json);
+            
+            var loadMachineBlock = loadWorldBlockDatastore.GetBlock(new Vector3Int(0, 0));
+            
+            //ブロックID、intIDが同じであることを確認
+            Assert.AreEqual(machineBlock.BlockId, loadMachineBlock.BlockId);
+            Assert.AreEqual(machineBlock.BlockInstanceId, loadMachineBlock.BlockInstanceId);
+            
+            
+            //機械のレシピの残り時間のチェック
+            var machineProcessor = loadMachineBlock.GetComponent<VanillaMachineProcessorComponent>();
+            Assert.AreEqual(0.3, machineProcessor.RemainingSecond);
+            //レシピIDのチェック
+            Assert.AreEqual(recipeId, machineProcessor.RecipeGuid);
+            //機械のステータスのチェック
+            Assert.AreEqual(ProcessState.Processing, machineProcessor.CurrentState);
+            
+            
+            var loadMachineInventory = loadMachineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            //インプットスロットのチェック
+            var inputInventoryField = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadMachineInventory);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(5), 6), inputInventoryField.InputSlot[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(2), 4), inputInventoryField.InputSlot[1]);
+            
+            //アウトプットスロットのチェック
+            var outputInventoryField = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadMachineInventory);
+            Assert.AreEqual(itemStackFactory.CreatEmpty(), outputInventoryField.OutputSlot[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(1), 1), outputInventoryField.OutputSlot[1]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(3), 2), outputInventoryField.OutputSlot[2]);
+        }
+        
+        private (IBlockFactory, IWorldBlockDatastore, PlayerInventoryDataStore, AssembleSaveJsonText, WorldLoaderFromJson)
+            CreateBlockTestModule()
+        {
+            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var blockFactory = ServerContext.BlockFactory;
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            var assembleSaveJsonText = serviceProvider.GetService<AssembleSaveJsonText>();
+            var playerInventoryDataStore = serviceProvider.GetService<PlayerInventoryDataStore>();
+            var loadJsonFile = serviceProvider.GetService<IWorldSaveDataLoader>() as WorldLoaderFromJson;
+            
+            return (blockFactory, worldBlockDatastore, playerInventoryDataStore, assembleSaveJsonText, loadJsonFile);
+        }
     }
 }
 ```
 
-moorestech_server/Assets/Scripts/Game.Block.Interface/BlockComponentManager.cs
+moorestech_server/Assets/Scripts/Tests/UnitTest/Core/Block/MinerSaveLoadTest.cs
+```cs
+using System.Reflection;
+using Core.Inventory;
+using Core.Master;
+using Game.Block.Blocks.Miner;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.UnitTest.Core.Block
+{
+    public class MinerSaveLoadTest
+    {
+        
+        [Test]
+        public void SaveLoadTest()
+        {
+            var (_, serviceProvider) =
+                new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var blockFactory = ServerContext.BlockFactory;
+            var minerGuid = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.MinerId).BlockGuid;
+            
+            var minerPosInfo = new BlockPositionInfo(new Vector3Int(0, 0), BlockDirection.North, Vector3Int.one);
+            var originalMiner = blockFactory.Create(ForUnitTestModBlockId.MinerId, new BlockInstanceId(1), minerPosInfo);
+            var originalMinerComponent = originalMiner.GetComponent<VanillaMinerProcessorComponent>();
+            var originalRemainingMillSecond = 0.35;
+            
+            var inventory =
+                (OpenableInventoryItemDataStoreService)typeof(VanillaMinerProcessorComponent)
+                    .GetField("_openableInventoryItemDataStoreService", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(originalMinerComponent);
+            inventory.SetItem(0, new ItemId(1), 1);
+            inventory.SetItem(2, new ItemId(4), 1);
+            typeof(VanillaMinerProcessorComponent).GetField("_remainingSecond", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(originalMinerComponent, originalRemainingMillSecond);
+            
+            
+            var json = originalMiner.GetSaveState();
+            Debug.Log(json);
+            
+            
+            var loadedMiner = blockFactory.Load(minerGuid, new BlockInstanceId(1), json, minerPosInfo);
+            var loadedMinerComponent = loadedMiner.GetComponent<VanillaMinerProcessorComponent>();
+            var loadedInventory =
+                (OpenableInventoryItemDataStoreService)typeof(VanillaMinerProcessorComponent)
+                    .GetField("_openableInventoryItemDataStoreService", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(originalMinerComponent);
+            var loadedRemainingMillSecond =
+                (double)typeof(VanillaMinerProcessorComponent)
+                    .GetField("_remainingSecond", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(loadedMinerComponent);
+            
+            Assert.AreEqual(inventory.GetItem(0), loadedInventory.GetItem(0));
+            Assert.AreEqual(inventory.GetItem(1), loadedInventory.GetItem(1));
+            Assert.AreEqual(inventory.GetItem(2), loadedInventory.GetItem(2));
+            Assert.AreEqual(originalRemainingMillSecond, loadedRemainingMillSecond);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/UnitTest/Game/SaveLoad/PowerGeneratorSaveLoadTest.cs
+```cs
+using System.Reflection;
+using Core.Inventory;
+using Core.Master;
+using Game.Block.Blocks.PowerGenerator;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Mooresmaster.Model.BlocksModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.UnitTest.Game.SaveLoad
+{
+    public class PowerGeneratorSaveLoadTest
+    {
+        
+        [Test]
+        public void PowerGeneratorTest()
+        {
+            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var blockFactory = ServerContext.BlockFactory;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            var fuelSlotCount = (MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.GeneratorId).BlockParam as ElectricGeneratorBlockParam).FuelItemSlotCount;
+            var generatorPosInfo = new BlockPositionInfo(Vector3Int.zero, BlockDirection.North, Vector3Int.one);
+            var powerGeneratorBlock = blockFactory.Create(ForUnitTestModBlockId.GeneratorId, new BlockInstanceId(10), generatorPosInfo);
+            var powerGenerator = powerGeneratorBlock.GetComponent<VanillaElectricGeneratorComponent>();
+            
+             var fuelItemId = new ItemId(5);
+            const int remainingFuelTime = 567;
+            
+            //検証元の発電機を作成
+            var type = typeof(VanillaElectricGeneratorComponent);
+            type.GetField("_currentFuelItemId", BindingFlags.NonPublic | BindingFlags.Instance)
+                .SetValue(powerGenerator, fuelItemId);
+            type.GetField("_remainingFuelTime", BindingFlags.NonPublic | BindingFlags.Instance)
+                .SetValue(powerGenerator, remainingFuelTime);
+            var fuelItemStacks = (OpenableInventoryItemDataStoreService)type
+                .GetField("_itemDataStoreService", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(powerGenerator);
+            fuelItemStacks.SetItem(0, itemStackFactory.Create(new ItemId(1), 5));
+            fuelItemStacks.SetItem(2, itemStackFactory.Create(new ItemId(3), 5));
+            
+            
+            //セーブのテキストを取得
+            var saveText = powerGenerator.GetSaveState();
+            Debug.Log(saveText);
+            
+            
+            var blockGuid = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.GeneratorId).BlockGuid;
+            //発電機を再作成
+            var loadedPowerGeneratorBlock = blockFactory.Load(blockGuid, new BlockInstanceId(10), saveText, generatorPosInfo);
+            var loadedPowerGenerator = loadedPowerGeneratorBlock.GetComponent<VanillaElectricGeneratorComponent>();
+            //発電機を再作成した結果を検証
+            var loadedFuelItemId = (ItemId)type.GetField("_currentFuelItemId", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadedPowerGenerator);
+            Assert.AreEqual(fuelItemId, loadedFuelItemId);
+            
+            var loadedRemainingFuelTime = (double)type
+                .GetField("_remainingFuelTime", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadedPowerGenerator);
+            Assert.AreEqual(remainingFuelTime, loadedRemainingFuelTime);
+            
+            var loadedFuelItemStacks = (OpenableInventoryItemDataStoreService)type
+                .GetField("_itemDataStoreService", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadedPowerGenerator);
+            
+            //燃料スロットの検証
+            Assert.AreEqual(fuelItemStacks.GetSlotSize(), loadedFuelItemStacks.GetSlotSize());
+            for (var i = 0; i < fuelSlotCount; i++)
+                Assert.AreEqual(fuelItemStacks.InventoryItems[i], loadedFuelItemStacks.InventoryItems[i]);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/GearBeltConveyorTest.cs
 ```cs
 using System;
 using System.Collections.Generic;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Component;
+using Game.Block.Interface;
 using Game.Block.Interface.Component;
-using Game.Block.Interface.ComponentAttribute;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Gear.Common;
+using Microsoft.Extensions.DependencyInjection;
+using Mooresmaster.Model.BlockConnectInfoModule;
+using Mooresmaster.Model.BlocksModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module;
+using Tests.Module.TestMod;
+using UnityEngine;
 
-namespace Game.Block.Interface
+namespace Tests.CombinedTest.Core
 {
-    public interface IBlockComponentManager
+    public class GearBeltConveyorTest
     {
-        public T GetComponent<T>() where T : IBlockComponent;
-        
-        public bool ExistsComponent<T>() where T : IBlockComponent;
-        
-        public bool TryGetComponent<T>(out T component) where T : IBlockComponent;
-    }
-    
-    public class BlockComponentManager : IBlockComponentManager
-    {
-        private readonly List<IBlockComponent> _blockComponents = new();
-        private readonly Dictionary<Type, IBlockComponent> _disallowMultiple = new();
-        private bool IsDestroy { get; set; }
-        
-        public T GetComponent<T>() where T : IBlockComponent
+        // トルクの供給率が100%のとき、指定した時間でアイテムが出てくるテスト
+        [Test]
+        public void OutputTestWhenTorqueSuppliedRateIs100()
         {
-            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
             
-            return (T)_blockComponents.Find(x => x is T);
-        }
-        
-        public bool ExistsComponent<T>() where T : IBlockComponent
-        {
-            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
             
-            return _blockComponents.Exists(x => x is T);
-        }
-        
-        public bool TryGetComponent<T>(out T component) where T : IBlockComponent
-        {
-            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
+            const int id = 2;
+            const int count = 3;
+            var item = itemStackFactory.Create(new ItemId(id), count);
+            var dummy = new DummyBlockInventory();
             
-            var result = _blockComponents.Find(x => x is T);
-            if (result == null)
+            
+            // gearBeltConveyorブロックを生成
+            var gearBeltConveyorPosition = new Vector3Int(0, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.GearBeltConveyor, gearBeltConveyorPosition, BlockDirection.North, out var gearBeltConveyor);
+            var beltConveyorComponent = gearBeltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)gearBeltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            connectInventory.Add(dummy, (null, null));
+            
+            // generatorブロックを作成
+            var generatorPosition = new Vector3Int(1, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.East, out var generator);
+            
+            // testGearブロックを作成
+            var testGearPosition = new Vector3Int(2, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, testGearPosition, BlockDirection.East, out var testGear);
+            
+            var gearNetworkDatastore = serviceProvider.GetService<GearNetworkDatastore>();
+            IReadOnlyDictionary<GearNetworkId, GearNetwork> gearNetwork = gearNetworkDatastore.GearNetworks;
+            
+            
+            const int torqueRate = 1;
+            const int generatorRpm = 10;
+            var gearBeltConveyorBlockParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.GearBeltConveyor).BlockParam as GearBeltConveyorBlockParam;
+            var duration = 1f / (generatorRpm * torqueRate * gearBeltConveyorBlockParam.BeltConveyorSpeed);
+            var expectedEndTime = DateTime.Now.AddSeconds(duration);
+            var startTime = DateTime.Now;
+            beltConveyorComponent.InsertItem(item);
+            
+            // for (var i = 0; i < 100; i++)
+            // {
+            //     GameUpdater.UpdateWithWait();
+            // }
+            var c = 0;
+            while (!dummy.IsItemExists)
             {
-                component = default;
-                return false;
+                c++;
+                GameUpdater.UpdateWithWait();
+                var elapsed = DateTime.Now - startTime;
+                if (elapsed.TotalSeconds > 20) Assert.Fail();
             }
             
-            component = (T)result;
-            return true;
+            Assert.True(dummy.IsItemExists);
+            
+            var now = DateTime.Now;
+            Debug.Log($"{now} {expectedEndTime}\n{(now - startTime).TotalSeconds}\n{(expectedEndTime - now).TotalSeconds}\n{duration}\n{c}");
+            Assert.True(now <= expectedEndTime.AddSeconds(0.4));
+            Assert.True(expectedEndTime.AddSeconds(-0.4) <= now);
         }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block/Blocks/Miner/VanillaMinerProcessorComponent.cs
+```cs
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using Core.Inventory;
+using Core.Item.Interface;
+using Core.Master;
+using Game.Block.Blocks.Service;
+using Game.Block.Blocks.Util;
+using Game.Block.Component;
+using Game.Block.Event;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Event;
+using Game.Block.Interface.State;
+using Game.Context;
+using Game.EnergySystem;
+using Game.Map.Interface.Vein;
+using MessagePack;
+using Mooresmaster.Model.MineSettingsModule;
+using Newtonsoft.Json;
+using UniRx;
+
+namespace Game.Block.Blocks.Miner
+{
+    public class VanillaMinerProcessorComponent : IBlockInventory, IOpenableInventory, IBlockSaveState, IBlockStateChange, IUpdatableBlockComponent
+    {
+        public bool IsDestroy { get; private set; }
+        public ElectricPower RequestEnergy { get; }
+        public IObservable<BlockState> OnChangeBlockState => _blockStateChangeSubject;
+        
+        private readonly MineSettings _mineSettings;
+        private readonly BlockOpenableInventoryUpdateEvent _blockInventoryUpdate;
+        private readonly Subject<BlockState> _blockStateChangeSubject = new();
+        private readonly ConnectingInventoryListPriorityInsertItemService _connectInventoryService;
+        private readonly List<IItemStack> _miningItems = new();
+        
+        private readonly OpenableInventoryItemDataStoreService _openableInventoryItemDataStoreService;
+        private readonly BlockInstanceId _blockInstanceId;
+        
+        private ElectricPower _currentPower;
+        
+        private float _defaultMiningTime = float.MaxValue;
+        private double _remainingSecond = double.MaxValue;
+        
+        private VanillaMinerState _lastMinerState;
+        private VanillaMinerState _currentState = VanillaMinerState.Idle;
+        
+        public VanillaMinerProcessorComponent(BlockInstanceId blockInstanceId, ElectricPower requestPower, int outputSlotCount, BlockOpenableInventoryUpdateEvent openableInventoryUpdateEvent, BlockConnectorComponent<IBlockInventory> inputConnectorComponent, BlockPositionInfo blockPositionInfo, MineSettings mineSettings)
+        {
+            _mineSettings = mineSettings;
+            _blockInstanceId = blockInstanceId;
+            RequestEnergy = requestPower;
+            
+            _blockInventoryUpdate = openableInventoryUpdateEvent;
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            _openableInventoryItemDataStoreService = new OpenableInventoryItemDataStoreService(InvokeEvent, itemStackFactory, outputSlotCount);
+            _connectInventoryService = new ConnectingInventoryListPriorityInsertItemService(inputConnectorComponent);
+            
+            SetMiningItem();
+            
+            #region Internal
+            
+            void SetMiningItem()
+            {
+                List<IMapVein> veins = ServerContext.MapVeinDatastore.GetOverVeins(blockPositionInfo.OriginalPos);
+                foreach (var vein in veins) _miningItems.Add(itemStackFactory.Create(vein.VeinItemId, 1));
+                if (veins.Count == 0) return;
+                
+                foreach (var miningSetting in _mineSettings.items)
+                {
+                    var itemId = MasterHolder.ItemMaster.GetItemId(miningSetting.ItemGuid);
+                    if (itemId != veins[0].VeinItemId) continue;
+                    _defaultMiningTime = miningSetting.Time;
+                    _remainingSecond = _defaultMiningTime;
+                    break;
+                }
+            }
+            
+            #endregion
+        }
+        
+        public VanillaMinerProcessorComponent(string saveData, BlockInstanceId blockInstanceId, ElectricPower requestPower, int outputSlotCount, BlockOpenableInventoryUpdateEvent openableInventoryUpdateEvent, BlockConnectorComponent<IBlockInventory> inputConnectorComponent, BlockPositionInfo blockPositionInfo, MineSettings mineSettings)
+            : this(blockInstanceId, requestPower, outputSlotCount, openableInventoryUpdateEvent, inputConnectorComponent, blockPositionInfo, mineSettings)
+        {
+            var saveJsonObject = JsonConvert.DeserializeObject<VanillaElectricMinerSaveJsonObject>(saveData);
+            for (var i = 0; i < saveJsonObject.Items.Count; i++)
+            {
+                var itemStack = saveJsonObject.Items[i].ToItemStack();
+                _openableInventoryItemDataStoreService.SetItem(i, itemStack);
+            }
+            
+            _remainingSecond = saveJsonObject.RemainingSecond;
+        }
+        
+        public void SupplyPower(ElectricPower power)
+        {
+            BlockException.CheckDestroy(this);
+            
+            _currentPower = power;
+        }
+        
+        public string GetSaveState()
+        {
+            BlockException.CheckDestroy(this);
+            
+            var saveData = new VanillaElectricMinerSaveJsonObject
+            {
+                RemainingSecond = _remainingSecond,
+                Items = _openableInventoryItemDataStoreService.InventoryItems.Select(item => new ItemStackSaveJsonObject(item)).ToList(),
+            };
+            
+            return JsonConvert.SerializeObject(saveData);
+        }
+        
+        
+        public void Update()
+        {
+            BlockException.CheckDestroy(this);
+            
+            MinerProgressUpdate();
+            CheckStateAndInvokeEventUpdate();
+            
+            #region Internal
+            
+            void MinerProgressUpdate()
+            {
+                var subTime = MachineCurrentPowerToSubSecond.GetSubSecond(_currentPower, RequestEnergy);
+                if (subTime <= 0)
+                {
+                    //電力の都合で処理を進められないのでreturn
+                    _currentState = VanillaMinerState.Idle;
+                    return;
+                }
+                
+                //insertできるかチェック
+                if (!_openableInventoryItemDataStoreService.InsertionCheck(_miningItems))
+                {
+                    //挿入できないのでreturn
+                    _currentState = VanillaMinerState.Idle;
+                    return;
+                }
+                
+                _currentState = VanillaMinerState.Mining;
+                
+                _remainingSecond -= subTime;
+                
+                if (_remainingSecond <= 0)
+                {
+                    _remainingSecond = _defaultMiningTime;
+                    
+                    //空きスロットを探索し、あるならアイテムを挿入
+                    _openableInventoryItemDataStoreService.InsertItem(_miningItems);
+                }
+                
+                _currentPower = new ElectricPower(0);
+                InsertConnectInventory();
+            }
+            
+            void CheckStateAndInvokeEventUpdate()
+            {
+                if (_lastMinerState == VanillaMinerState.Mining && _currentState == VanillaMinerState.Idle)
+                {
+                    //Miningからidleに切り替わったのでイベントを発火
+                    InvokeChangeStateEvent();
+                    _lastMinerState = _currentState;
+                    return;
+                }
+                
+                if (_currentState == VanillaMinerState.Idle)
+                    //Idle中は発火しない
+                    return;
+                
+                //マイニング中 この時は常にイベントを発火
+                InvokeChangeStateEvent();
+            }
+            
+            void InvokeChangeStateEvent()
+            {
+                BlockException.CheckDestroy(this);
+                
+                var state = GetBlockState();
+                _blockStateChangeSubject.OnNext(state);
+            }
+            
+            
+            void InsertConnectInventory()
+            {
+                BlockException.CheckDestroy(this);
+                
+                for (var i = 0; i < _openableInventoryItemDataStoreService.InventoryItems.Count; i++)
+                {
+                    var insertedItem = _connectInventoryService.InsertItem(_openableInventoryItemDataStoreService.InventoryItems[i]);
+                    _openableInventoryItemDataStoreService.SetItem(i, insertedItem);
+                }
+            }
+            
+            #endregion
+        }
+        
+        public BlockState GetBlockState()
+        {
+            var processingRate = 1 - (float)_remainingSecond / _defaultMiningTime;
+            var binaryData = MessagePackSerializer.Serialize(new CommonMachineBlockStateChangeData(_currentPower.AsPrimitive(), RequestEnergy.AsPrimitive(), processingRate));
+            var state = new BlockState(_currentState.ToStr(), _lastMinerState.ToStr(), binaryData);
+            return state;
+        }
+        
+        private void InvokeEvent(int slot, IItemStack itemStack)
+        {
+            BlockException.CheckDestroy(this);
+            
+            _blockInventoryUpdate.OnInventoryUpdateInvoke(new BlockOpenableInventoryUpdateEventProperties(_blockInstanceId, slot, itemStack));
+        }
+        
+        #region Implimantion IOpenableInventory
+        
+        
+        public IItemStack GetItem(int slot)
+        {
+            BlockException.CheckDestroy(this);
+            
+            return _openableInventoryItemDataStoreService.GetItem(slot);
+        }
+        
+        public void SetItem(int slot, IItemStack itemStack)
+        {
+            BlockException.CheckDestroy(this);
+            
+            _openableInventoryItemDataStoreService.SetItem(slot, itemStack);
+        }
+        
+        public int GetSlotSize()
+        {
+            BlockException.CheckDestroy(this);
+            return _openableInventoryItemDataStoreService.GetSlotSize();
+        }
+        
+        
+        public IReadOnlyList<IItemStack> InventoryItems => _openableInventoryItemDataStoreService.InventoryItems;
+        
+        public IItemStack ReplaceItem(int slot, ItemId itemId, int count)
+        {
+            BlockException.CheckDestroy(this);
+            
+            return _openableInventoryItemDataStoreService.ReplaceItem(slot, itemId, count);
+        }
+        
+        public IItemStack InsertItem(IItemStack itemStack)
+        {
+            BlockException.CheckDestroy(this);
+            
+            return _openableInventoryItemDataStoreService.InsertItem(itemStack);
+        }
+        
+        public IItemStack InsertItem(ItemId itemId, int count)
+        {
+            BlockException.CheckDestroy(this);
+            
+            return _openableInventoryItemDataStoreService.InsertItem(itemId, count);
+        }
+        
+        public List<IItemStack> InsertItem(List<IItemStack> itemStacks)
+        {
+            BlockException.CheckDestroy(this);
+            
+            return _openableInventoryItemDataStoreService.InsertItem(itemStacks);
+        }
+        
+        public bool InsertionCheck(List<IItemStack> itemStacks)
+        {
+            BlockException.CheckDestroy(this);
+            
+            return _openableInventoryItemDataStoreService.InsertionCheck(itemStacks);
+        }
+        
+        public void SetItem(int slot, ItemId itemId, int count)
+        {
+            BlockException.CheckDestroy(this);
+            
+            _openableInventoryItemDataStoreService.SetItem(slot, itemId, count);
+        }
+        
+        public IItemStack ReplaceItem(int slot, IItemStack itemStack)
+        {
+            BlockException.CheckDestroy(this);
+            
+            return _openableInventoryItemDataStoreService.ReplaceItem(slot, itemStack);
+        }
+        
+        public ReadOnlyCollection<IItemStack> CreateCopiedItems()
+        {
+            BlockException.CheckDestroy(this);
+            return _openableInventoryItemDataStoreService.CreateCopiedItems();
+        }
+        
+        #endregion
         
         public void Destroy()
         {
             IsDestroy = true;
-            foreach (var blockComponent in _blockComponents) blockComponent.Destroy();
         }
-        
-        public void AddComponent(IBlockComponent blockComponent)
-        {
-            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
-            
-            CheckDisallowMultiple();
-            
-            _blockComponents.Add(blockComponent);
-            
-            #region Internal
-            
-            void CheckDisallowMultiple()
-            {
-                var disallowMultiple = Attribute.GetCustomAttribute(blockComponent.GetType(), typeof(DisallowMultiple));
-                if (disallowMultiple == null) return;
-                
-                if (_disallowMultiple.ContainsKey(blockComponent.GetType())) throw new InvalidOperationException($"This component is already added. {blockComponent.GetType()}");
-                _disallowMultiple.Add(blockComponent.GetType(), blockComponent);
-            }
-            
-            #endregion
-        }
-        
-        public void AddComponents(IEnumerable<IBlockComponent> blockComponents)
-        {
-            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
-            
-            foreach (var blockComponent in blockComponents) AddComponent(blockComponent);
-        }
-        
-        public void RemoveComponent(IBlockComponent blockComponent)
-        {
-            if (IsDestroy) throw new InvalidOperationException("Block is already destroyed");
-            
-            _blockComponents.Remove(blockComponent);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.MainMenu/LanguageSetting.cs
-```cs
-using Client.Localization;
-using TMPro;
-using UnityEngine;
-
-namespace Client.MainMenu
-{
-    public class LanguageSetting : MonoBehaviour
-    {
-        [SerializeField] private TMP_Dropdown tmpDropdown;
-        
-        private void Start()
-        {
-            tmpDropdown.ClearOptions();
-            tmpDropdown.AddOptions(Localize.LanguageCodes);
-            tmpDropdown.value = Localize.LanguageCodes.IndexOf(Localize.CurrentLanguageCode);
-            tmpDropdown.onValueChanged.AddListener(OnValueChanged);
-        }
-        
-        private void OnValueChanged(int index)
-        {
-            Localize.SetLanguage(Localize.LanguageCodes[index]);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Common/PlayerPrefsKeys.cs
-```cs
-namespace Client.Common
-{
-    public class PlayerPrefsKeys
-    {
-        public const string PlayerIdKey = "PlayerId";
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Challenge/ChallengeJsonObject.cs
-```cs
-using System.Collections.Generic;
-using Newtonsoft.Json;
-
-namespace Game.Challenge
-{
-    public class ChallengeJsonObject
-    {
-        [JsonProperty("completedGuids")] public List<string> CompletedGuids;
-        [JsonProperty("playerId")] public int PlayerId;
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Core.Master/MapObjectMaster.cs
-```cs
-using System;
-using Mooresmaster.Loader.MapObjectsModule;
-using Mooresmaster.Model.MapObjectsModule;
-using Newtonsoft.Json.Linq;
-
-namespace Core.Master
-{
-    public class MapObjectMaster
-    {
-        public readonly MapObjects MapObjects;
-        
-        public MapObjectMaster(JToken jToken)
-        {
-            MapObjects = MapObjectsLoader.Load(jToken);
-        }
-        
-        public MapObjectMasterElement GetMapObjectElement(Guid guid)
-        {
-            return Array.Find(MapObjects.Data, x => x.MapObjectGuid == guid);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/CombinedTest/Server/PacketTest/Event/EventTestUtil.cs
-```cs
-using System.Collections.Generic;
-using System.Linq;
-using MessagePack;
-using Server.Protocol.PacketResponse;
-
-namespace Tests.CombinedTest.Server.PacketTest.Event
-{
-    public class EventTestUtil
-    {
-        public static List<byte> EventRequestData(int playerID)
-        {
-            return MessagePackSerializer.Serialize(new EventProtocolMessagePack(playerID)).ToList();
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CharacterEmotionTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-using static System.Enum;
-
-namespace Client.Skit.SkitTrack
-{
-    public class CharacterEmotionTrack : IStoryTrack
-    {
-        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
-        {
-            var characterKey = parameters[0];
-            var emotion = (EmotionType)Parse(typeof(EmotionType), parameters[1]);
-            var duration = float.Parse(parameters[2]);
-            
-            var character = storyContext.GetCharacter(characterKey);
-            character.SetEmotion(emotion, duration);
-            
-            return null;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Localization/TextMeshProLocalize.cs
-```cs
-using System;
-using TMPro;
-using UniRx;
-using UnityEngine;
-
-namespace Client.Localization
-{
-    [RequireComponent(typeof(TextMeshProUGUI))]
-    public class TextMeshProLocalize : MonoBehaviour
-    {
-        [SerializeField] private string key;
-        
-        private TMP_Text _text;
-        
-        private void Awake()
-        {
-            _text = GetComponent<TextMeshProUGUI>();
-            _text.text = Localize.Get(key);
-            
-            Localize.OnLanguageChanged.Subscribe(_ => GetComponent<TextMeshProUGUI>().text = Localize.Get(key))
-                .AddTo(this);
-        }
-        
-        public void SetKey(string key, params string[] addContents)
-        {
-            this.key = key;
-            
-            var text = string.Empty;
-            try
-            {
-                text = string.Format(Localize.Get(key), addContents);
-            }
-            catch (FormatException e)
-            {
-                text = "[Localize] Format Error : " + key;
-            }
-            catch (Exception e)
-            {
-                text = $"[Localize] Other Error : {key} : {e.Message}";
-            }
-            
-            if (_text == null) _text = GetComponent<TextMeshProUGUI>();
-            _text.text = text;
-            _text.ForceMeshUpdate();
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Core.Const/BlockConst.cs
-```cs
-using Core.Master;
-
-namespace Core.Const
-{
-    public static class BlockConst
-    {
-        public static readonly BlockId EmptyBlockId = new(0);
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Extension/BlockExtension.cs
-```cs
-using Game.Block.Interface.Component;
-
-namespace Game.Block.Interface.Extension
-{
-    public static class BlockExtension
-    {
-        public static T GetComponent<T>(this IBlock block) where T : IBlockComponent
-        {
-            return block.ComponentManager.GetComponent<T>();
-        }
-        
-        public static bool ExistsComponent<T>(this IBlock block) where T : IBlockComponent
-        {
-            return block.ComponentManager.ExistsComponent<T>();
-        }
-        
-        public static bool TryGetComponent<T>(this IBlock block, out T component) where T : IBlockComponent
-        {
-            return block.ComponentManager.TryGetComponent(out component);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CharacterTransformTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-using UnityEngine;
-
-namespace Client.Skit.SkitTrack
-{
-    public class CharacterTransformTrack : IStoryTrack
-    {
-        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
-        {
-            var characterKey = parameters[0];
-            
-            var posX = float.Parse(parameters[2]);
-            var posY = float.Parse(parameters[3]);
-            var posZ = float.Parse(parameters[4]);
-            var pos = new Vector3(posX, posY, posZ);
-            
-            var rotX = float.Parse(parameters[6]);
-            var rotY = float.Parse(parameters[7]);
-            var rotZ = float.Parse(parameters[8]);
-            var rot = new Vector3(rotX, rotY, rotZ);
-            
-            var character = storyContext.GetCharacter(characterKey);
-            
-            character.SetTransform(pos, rot);
-            
-            return null;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/WaitTimeTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-
-namespace Client.Skit.SkitTrack
-{
-    public class WaitTimeTrack : IStoryTrack
-    {
-        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
-        {
-            var time = float.Parse(parameters[0]);
-            await UniTask.Delay((int)(time * 1000));
-            
-            return null;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/JumpTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-
-namespace Client.Skit.SkitTrack
-{
-    public class JumpTrack : IStoryTrack
-    {
-        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
-        {
-            return parameters[0];
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Electric/EnergizedRangeObject.cs
-```cs
-using UnityEngine;
-
-namespace Client.Game.InGame.Electric
-{
-    public class EnergizedRangeObject : MonoBehaviour
-    {
-        public void SetRange(int range)
-        {
-            var y = transform.localScale.y;
-            transform.localScale = new Vector3(range, y, range);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/ServerStarter.cs
-```cs
-using System;
-using System.Threading;
-using Core.Update;
-using Server.Boot;
-using UnityEngine;
-
-public class ServerStarter : MonoBehaviour
-{
-    private CancellationTokenSource _autoSaveToken;
-    private Thread _serverUpdateThread;
-
-    private void Start()
-    {
-        (_serverUpdateThread, _autoSaveToken) = StartServer.Start(new string[] { });
-        _serverUpdateThread.Start();
-    }
-
-    private void FixedUpdate()
-    {
-        GameUpdater.Update();
-    }
-
-    private void OnDestroy()
-    {
-        _serverUpdateThread.Abort();
-        _autoSaveToken.Cancel();
-        GameUpdater.Dispose();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Gear/Common/Torque.cs
-```cs
-using UnitGenerator;
-
-namespace Game.Gear.Common
-{
-    [UnitOf(typeof(float), UnitGenerateOptions.ArithmeticOperator | UnitGenerateOptions.ValueArithmeticOperator | UnitGenerateOptions.Comparable)]
-    public partial struct Torque
-    {
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Entity/EntitiesDatastore.cs
-```cs
-using System;
-using System.Collections.Generic;
-using Game.Entity.Interface;
-using UnityEngine;
-
-namespace Game.Entity
-{
-    public class EntitiesDatastore : IEntitiesDatastore
-    {
-        private readonly Dictionary<EntityInstanceId, IEntity> _entities = new();
-        
-        private readonly IEntityFactory _entityFactory;
-        
-        public EntitiesDatastore(IEntityFactory entityFactory)
-        {
-            _entityFactory = entityFactory;
-        }
-        
-        public void Add(IEntity entity)
-        {
-            _entities.Add(entity.InstanceId, entity);
-        }
-        
-        public bool Exists(EntityInstanceId instanceId)
-        {
-            return _entities.ContainsKey(instanceId);
-        }
-        
-        public IEntity Get(EntityInstanceId instanceId)
-        {
-            return _entities[instanceId];
-        }
-        
-        public List<EntityJsonObject> GetSaveJsonObject()
-        {
-            var saveData = new List<EntityJsonObject>();
-            foreach (KeyValuePair<EntityInstanceId, IEntity> entity in _entities)
-            {
-                var e = entity.Value;
-                saveData.Add(new EntityJsonObject(e.EntityType, e.InstanceId.AsPrimitive(), e.Position));
-            }
-            
-            return saveData;
-        }
-        
-        public void LoadBlockDataList(List<EntityJsonObject> saveBlockDataList)
-        {
-            foreach (var save in saveBlockDataList)
-            {
-                var entity = _entityFactory.CreateEntity(save.Type, new EntityInstanceId(save.InstanceId));
-                _entities.Add(entity.InstanceId, entity);
-                
-                var pos = new Vector3(save.X, save.Y, save.Z);
-                SetPosition(new EntityInstanceId(save.InstanceId), pos);
-            }
-        }
-        
-        public void SetPosition(EntityInstanceId instanceId, Vector3 position)
-        {
-            if (_entities.TryGetValue(instanceId, out var entity))
-            {
-                entity.SetPosition(position);
-                return;
-            }
-            
-            throw new Exception("Entity not found " + instanceId);
-        }
-        
-        public Vector3 GetPosition(EntityInstanceId instanceId)
-        {
-            if (_entities.TryGetValue(instanceId, out var entity)) return entity.Position;
-            throw new Exception("Entity not found " + instanceId);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CameraworkTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-using DG.Tweening;
-using UnityEngine;
-using static System.Enum;
-
-namespace Client.Skit.SkitTrack
-{
-    public class CameraworkTrack : IStoryTrack
-    {
-        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
-        {
-            var duration = float.Parse(parameters[0]);
-            var easing = (Ease)Parse(typeof(Ease), parameters[1]);
-            
-            var fromPos = new Vector3(float.Parse(parameters[3]), float.Parse(parameters[4]), float.Parse(parameters[5]));
-            var fromRot = new Vector3(float.Parse(parameters[7]), float.Parse(parameters[8]), float.Parse(parameters[9]));
-            
-            var toPos = new Vector3(float.Parse(parameters[11]), float.Parse(parameters[12]), float.Parse(parameters[13]));
-            var toRot = new Vector3(float.Parse(parameters[15]), float.Parse(parameters[16]), float.Parse(parameters[17]));
-            
-            storyContext.SkitCamera.TweenCamera(fromPos, fromRot, toPos, toRot, duration, easing);
-            
-            return null;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.EventHandler/EnergyEvent/EnergyService/EnergyServiceDependencyContainer.cs
-```cs
-using Game.EnergySystem;
-using Game.World.Interface.DataStore;
-
-namespace Game.World.EventHandler.EnergyEvent.EnergyService
-{
-    public class EnergyServiceDependencyContainer<TSegment> where TSegment : EnergySegment, new()
-    {
-        public readonly IWorldEnergySegmentDatastore<TSegment> WorldEnergySegmentDatastore;
-        
-        public EnergyServiceDependencyContainer(IWorldEnergySegmentDatastore<TSegment> worldEnergySegmentDatastore)
-        {
-            WorldEnergySegmentDatastore = worldEnergySegmentDatastore;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/TransitionTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-
-namespace Client.Skit.SkitTrack
-{
-    public class TransitionTrack : IStoryTrack
-    {
-        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
-        {
-            var isShow = parameters[0] == "TRUE";
-            var duration = float.Parse(parameters[1]);
-            storyContext.SkitUI.ShowTransition(isShow, duration);
-            
-            await UniTask.Delay((int)(duration * 1000));
-            
-            return null;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/Skit/SkitCamera.cs
-```cs
-using DG.Tweening;
-using UnityEngine;
-
-namespace Client.Skit.Skit
-{
-    public interface ISkitCamera
-    {
-        public void TweenCamera(Vector3 fromPos, Vector3 fromRot, Vector3 toPos, Vector3 toRot, float duration, Ease easing);
-        
-        public void SetTransform(Vector3 pos, Vector3 rot);
-        
-        public void SetActive(bool enabled);
     }
     
-    public class SkitCamera : MonoBehaviour, ISkitCamera
+    public enum VanillaMinerState
     {
-        [SerializeField] private Camera camera;
-        
-        public void TweenCamera(Vector3 fromPos, Vector3 fromRot, Vector3 toPos, Vector3 toRot, float duration, Ease easing)
-        {
-            camera.transform.position = fromPos;
-            camera.transform.eulerAngles = fromRot;
-            
-            camera.transform.DOMove(toPos, duration).SetEase(easing);
-            camera.transform.DORotate(toRot, duration).SetEase(easing);
-        }
-        
-        public void SetTransform(Vector3 pos, Vector3 rot)
-        {
-            camera.transform.position = pos;
-            camera.transform.eulerAngles = rot;
-        }
-        
-        public void SetActive(bool enabled)
-        {
-            gameObject.SetActive(enabled);
-        }
+        Idle,
+        Mining,
     }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Tutorial/UIHighlight/UIHighlightTutorialTargetObject.cs
-```cs
-using UnityEngine;
-
-namespace Client.Game.InGame.Tutorial.UIHighlight
-{
-    [RequireComponent(typeof(RectTransform))]
-    public class UIHighlightTutorialTargetObject : MonoBehaviour
+    
+    public static class ProcessStateExtension
     {
-        public bool ActiveSelf => gameObject.activeInHierarchy;
-        
-        public string HighlightObjectId => highlightObjectId;
-        [SerializeField] private string highlightObjectId;
-        
-        public RectTransform RectTransform => rectTransform;
-        [SerializeField] private RectTransform rectTransform;
-        
-        public void Initialize(string uiObjectId)
+        /// <summary>
+        ///     <see cref="ProcessState" />をStringに変換します。
+        ///     EnumのToStringを使わない理由はアロケーションによる速度低下をなくすためです。
+        /// </summary>
+        public static string ToStr(this VanillaMinerState state)
         {
-            highlightObjectId = uiObjectId;
-            rectTransform = GetComponent<RectTransform>();
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IBlockConnectorComponent.cs
-```cs
-using System.Collections.Generic;
-using Mooresmaster.Model.BlockConnectInfoModule;
-
-namespace Game.Block.Interface.Component
-{
-    public interface IBlockConnectorComponent<TTarget> : IBlockComponent where TTarget : IBlockComponent
-    {
-        public IReadOnlyDictionary<TTarget, (IConnectOption selfOption, IConnectOption targetOption)> ConnectedTargets { get; }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.SaveLoad/Json/WorldSaverForJson.cs
-```cs
-using System.IO;
-using Game.SaveLoad.Interface;
-
-namespace Game.SaveLoad.Json
-{
-    public class WorldSaverForJson : IWorldSaveDataSaver
-    {
-        private readonly AssembleSaveJsonText _assembleSaveJsonText;
-        private readonly SaveJsonFileName _fileName;
-        
-        public WorldSaverForJson(SaveJsonFileName fileName, AssembleSaveJsonText assembleSaveJsonText)
-        {
-            _fileName = fileName;
-            _assembleSaveJsonText = assembleSaveJsonText;
-        }
-        
-        public void Save()
-        {
-            File.WriteAllText(_fileName.FullSaveFilePath, _assembleSaveJsonText.AssembleSaveJson());
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Common/TextureExtension.cs
-```cs
-using UnityEngine;
-
-namespace Client.Common
-{
-    public static class TextureExtension
-    {
-        public static Sprite ToSprite(this Texture2D texture2D)
-        {
-            return texture2D == null ? null : Sprite.Create(texture2D, new Rect(0, 0, texture2D.width, texture2D.height), Vector2.zero);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Server.Boot/AutoSaveSystem.cs
-```cs
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Game.SaveLoad.Interface;
-
-namespace Server.Boot
-{
-    public class AutoSaveSystem
-    {
-        private readonly IWorldSaveDataSaver _worldSaveDataSaver;
-        
-        public AutoSaveSystem(IWorldSaveDataSaver worldSaveDataSaver)
-        {
-            _worldSaveDataSaver = worldSaveDataSaver;
-        }
-        
-        public async Task AutoSave(CancellationTokenSource cancellationTokenSource)
-        {
-            cancellationTokenSource.Token.ThrowIfCancellationRequested();
-            while (true)
+            return state switch
             {
-                await Task.Delay(TimeSpan.FromSeconds(30));
-                _worldSaveDataSaver.Save();
-                if (cancellationTokenSource.Token.IsCancellationRequested) break;
-            }
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/BlockInstanceId.cs
-```cs
-using System;
-using UnitGenerator;
-
-namespace Game.Block.Interface
-{
-    [UnitOf(typeof(int), UnitGenerateOptions.MessagePackFormatter | UnitGenerateOptions.Comparable)]
-    public readonly partial struct BlockInstanceId
-    {
-        private static readonly Random Random = new(130851);
-        
-        public static BlockInstanceId Create()
-        {
-            return new BlockInstanceId(Random.Next(int.MinValue, int.MaxValue));
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/IStoryTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-
-namespace Client.Skit.SkitTrack
-{
-    public interface IStoryTrack
-    {
-        public UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters);
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Common/LayerConst.cs
-```cs
-using UnityEngine;
-
-namespace Client.Common
-{
-    public class LayerConst
-    {
-        public static readonly int BlockLayer = LayerMask.NameToLayer("Block");
-        public static readonly int MapObjectLayer = LayerMask.NameToLayer("MapObject");
-        public static readonly int PlayerLayer = LayerMask.NameToLayer("Player");
-        
-        public static readonly int BlockOnlyLayerMask = 1 << BlockLayer;
-        public static readonly int MapObjectOnlyLayerMask = 1 << MapObjectLayer;
-        public static readonly int PlayerOnlyLayerMask = 1 << PlayerLayer;
-        
-        public static readonly int WithoutMapObjectAndPlayerLayerMask = ~MapObjectOnlyLayerMask & ~PlayerOnlyLayerMask;
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/StoryTrackDefine.cs
-```cs
-namespace Client.Skit.SkitTrack
-{
-    public class StoryTrackDefine
-    {
-        public static IStoryTrack GetStoryTrack(string key)
-        {
-            return key switch
-            {
-                "Camerawork" => new CameraworkTrack(),
-                "CameraWarp" => new CameraWarpTrack(),
-                "Text" => new TextTrack(),
-                "CharacterTransform" => new CharacterTransformTrack(),
-                "CharacterMotion" => new CharacterMotionTrack(),
-                "CharacterEmotion" => new CharacterEmotionTrack(),
-                "WaitTime" => new WaitTimeTrack(),
-                "Transition" => new TransitionTrack(),
-                "SelectionTrack" => new SelectionTrack(),
-                "Jump" => new JumpTrack(),
-                _ => null,
+                VanillaMinerState.Idle => "idle",
+                VanillaMinerState.Mining =>"mining",
+                _ => throw new ArgumentOutOfRangeException(nameof(state), state, null),
             };
         }
     }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/IWorldEnergySegmentDatastore.cs
-```cs
-using Game.EnergySystem;
-
-namespace Game.World.Interface.DataStore
-{
-    public interface IWorldEnergySegmentDatastore<TSegment> where TSegment : EnergySegment, new()
-    {
-        public TSegment GetEnergySegment(IElectricTransformer transformer);
-        public TSegment GetEnergySegment(int index);
-        public TSegment CreateEnergySegment();
-        public void SetEnergySegment(TSegment energySegment);
-        public void RemoveEnergySegment(TSegment energySegment);
-        public int GetEnergySegmentListCount();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.EnergySystem/ElectricPower.cs
-```cs
-using UnitGenerator;
-
-namespace Game.EnergySystem
-{
-    [UnitOf(typeof(float), UnitGenerateOptions.ArithmeticOperator | UnitGenerateOptions.ValueArithmeticOperator | UnitGenerateOptions.Comparable)]
-    public readonly partial struct ElectricPower
-    {
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Input/InputManager.cs
-```cs
-using System;
-using UnityEngine;
-using UnityEngine.InputSystem;
-
-namespace Client.Input
-{
-    public static class InputManager
-    {
-        private static PayerInputManager player;
-        private static PlayableInputManager playable;
-        private static UIInputManager ui;
-        private static MoorestechInputSettings _instance;
-        public static PayerInputManager Player => player ??= new PayerInputManager(Instance);
-        
-        public static PlayableInputManager Playable => playable ??= new PlayableInputManager(Instance);
-        
-        public static UIInputManager UI => ui ??= new UIInputManager(Instance);
-        
-        
-        private static MoorestechInputSettings Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = new MoorestechInputSettings();
-                    _instance.Enable();
-                }
-                
-                return _instance;
-            }
-        }
-        
-        public static void MouseCursorVisible(bool isVisible)
-        {
-            Cursor.lockState = isVisible ? CursorLockMode.None : CursorLockMode.Locked;
-        }
-    }
     
-    public class PayerInputManager
+    public class VanillaElectricMinerSaveJsonObject
     {
-        public readonly InputKey Jump;
-        public readonly InputKey Look;
-        public readonly InputKey Move;
-        public readonly InputKey Sprint;
-        
-        public PayerInputManager(MoorestechInputSettings settings)
-        {
-            Move = new InputKey(settings.Player.Move);
-            Look = new InputKey(settings.Player.Look);
-            Jump = new InputKey(settings.Player.Jump);
-            Sprint = new InputKey(settings.Player.Sprint);
-        }
-    }
-    
-    public class PlayableInputManager
-    {
-        public readonly InputKey BlockPlaceRotation;
-        public readonly InputKey ClickPosition;
-        public readonly InputKey ScreenLeftClick;
-        public readonly InputKey ScreenRightClick;
-        
-        public PlayableInputManager(MoorestechInputSettings settings)
-        {
-            ScreenLeftClick = new InputKey(settings.Playable.ScreenLeftClick);
-            ScreenRightClick = new InputKey(settings.Playable.ScreenRightClick);
-            ClickPosition = new InputKey(settings.Playable.ClickPosition);
-            BlockPlaceRotation = new InputKey(settings.Playable.BlockPlaceRotation);
-        }
-    }
-    
-    public class UIInputManager
-    {
-        public readonly InputKey AllCraft;
-        public readonly InputKey BlockDelete;
-        public readonly InputKey CloseUI;
-        public readonly InputKey HotBar;
-        public readonly InputKey InventoryItemHalve;
-        public readonly InputKey InventoryItemOnePut;
-        public readonly InputKey ItemDirectMove;
-        public readonly InputKey OneStackCraft;
-        public readonly InputKey OpenInventory;
-        public readonly InputKey OpenMenu;
-        public readonly InputKey QuestUI;
-        public readonly InputKey SwitchHotBar;
-        
-        public UIInputManager(MoorestechInputSettings settings)
-        {
-            OpenMenu = new InputKey(settings.UI.OpenMenu);
-            CloseUI = new InputKey(settings.UI.CloseUI);
-            OpenInventory = new InputKey(settings.UI.OpenInventory);
-            InventoryItemOnePut = new InputKey(settings.UI.InventoryItemOnePut);
-            InventoryItemHalve = new InputKey(settings.UI.InventoryItemHalve);
-            HotBar = new InputKey(settings.UI.HotBar);
-            SwitchHotBar = new InputKey(settings.UI.SwitchHotBar);
-            BlockDelete = new InputKey(settings.UI.BlockDelete);
-            AllCraft = new InputKey(settings.UI.AllCraft);
-            OneStackCraft = new InputKey(settings.UI.OneStackCraft);
-            QuestUI = new InputKey(settings.UI.QuestUI);
-            ItemDirectMove = new InputKey(settings.UI.ItemDirectMove);
-        }
-    }
-    
-    public class InputKey
-    {
-        private readonly InputAction _inputAction;
-        
-        
-        public InputKey(InputAction key)
-        {
-            _inputAction = key;
-            key.started += _ => { OnGetKeyDown?.Invoke(); };
-            key.performed += _ => { OnGetKey?.Invoke(); };
-            key.canceled += _ => { OnGetKeyUp?.Invoke(); };
-        }
-        
-        public bool GetKeyDown => _inputAction.WasPressedThisFrame();
-        public bool GetKey => _inputAction.IsPressed();
-        public bool GetKeyUp => _inputAction.WasReleasedThisFrame();
-        
-        public event Action OnGetKeyDown;
-        public event Action OnGetKey;
-        public event Action OnGetKeyUp;
-        
-        public TValue ReadValue<TValue>() where TValue : struct
-        {
-            return _inputAction.ReadValue<TValue>();
-        }
+        [JsonProperty("items")]
+        public List<ItemStackSaveJsonObject> Items;
+        [JsonProperty("remainingSecond")]
+        public double RemainingSecond;
     }
 }
 ```
 
-moorestech_client/Assets/Scripts/Client.Common/ServerConst.cs
-```cs
-using static System.IO.Path;
-
-namespace Client.Common
-{
-    public class ServerConst
-    {
-        public const string LocalServerIp = "127.0.0.1";
-        public const int LocalServerPort = 11564;
-        
-        public const int DefaultPlayerId = 1;
-        
-        
-        public static readonly string ServerDirName = "Server";
-        public static readonly string ServerDirectory = GetFullPath("./" + ServerDirName);
-        
-        public static readonly string ServerExePath = Combine(ServerDirectory, "moorestech_server.exe");
-        public static readonly string ServerModsDirectory = Combine(ServerDirectory, "mods");
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/UI/UIState/IUIState.cs
-```cs
-namespace Client.Game.InGame.UI.UIState
-{
-    public interface IUIState
-    {
-        public void OnEnter(UIStateEnum lastStateEnum);
-        public UIStateEnum GetNext();
-        public void OnExit();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/IWorldBlockDatastore.cs
-```cs
-using System;
-using System.Collections.Generic;
-using Core.Master;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Block.Interface.State;
-using UnityEngine;
-
-namespace Game.World.Interface.DataStore
-{
-    public interface IWorldBlockDatastore
-    {
-        public IReadOnlyDictionary<BlockInstanceId, WorldBlockData> BlockMasterDictionary { get; }
-        
-        public IObservable<(BlockState state, WorldBlockData blockData)> OnBlockStateChange { get; }
-        
-        public bool TryAddBlock(BlockId blockId, Vector3Int position, BlockDirection direction, out IBlock block);
-        public bool TryAddLoadedBlock(Guid blockGuid, BlockInstanceId blockInstanceId, string state, Vector3Int position, BlockDirection direction, out IBlock block);
-        public bool RemoveBlock(Vector3Int pos);
-        public IBlock GetBlock(Vector3Int pos);
-        public IBlock GetBlock(BlockInstanceId blockInstanceId);
-        public WorldBlockData GetOriginPosBlock(Vector3Int pos);
-        public Vector3Int GetBlockPosition(BlockInstanceId blockInstanceId);
-        public BlockDirection GetBlockDirection(Vector3Int pos);
-        public List<BlockJsonObject> GetSaveJsonObject();
-        public void LoadBlockDataList(List<BlockJsonObject> saveBlockDataList);
-    }
-    
-    public static class WorldBlockDatastoreExtension
-    {
-        public static bool Exists(this IWorldBlockDatastore datastore, Vector3Int pos)
-        {
-            var block = datastore.GetBlock(pos);
-            return block != null;
-        }
-        
-        public static bool TryGetBlock(this IWorldBlockDatastore datastore, Vector3Int pos, out IBlock block)
-        {
-            block = datastore.GetBlock(pos);
-            return block != null;
-        }
-        
-        public static bool ExistsComponent<TComponent>(this IWorldBlockDatastore datastore, Vector3Int pos) where TComponent : IBlockComponent
-        {
-            var block = datastore.GetBlock(pos);
-            if (block == null) return false;
-            return block.ComponentManager.ExistsComponent<TComponent>();
-        }
-        
-        public static TComponent GetBlock<TComponent>(this IWorldBlockDatastore datastore, Vector3Int pos) where TComponent : IBlockComponent
-        {
-            var block = datastore.GetBlock(pos);
-            
-            if (block.ComponentManager.TryGetComponent(out TComponent component2)) return component2;
-            
-            return default;
-        }
-        
-        public static bool TryGetBlock<TComponent>(this IWorldBlockDatastore datastore, Vector3Int pos, out TComponent component) where TComponent : IBlockComponent
-        {
-            if (datastore.ExistsComponent<TComponent>(pos))
-            {
-                component = datastore.GetBlock<TComponent>(pos);
-                return true;
-            }
-            
-            component = default;
-            return false;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/Skit/Starter/PlayerSkitStarterDetector.cs
-```cs
-using UnityEngine;
-
-namespace Client.Game.Skit.Starter
-{
-    public class PlayerSkitStarterDetector : MonoBehaviour
-    {
-        [SerializeField] private StartSkitUI startSkitUI;
-        
-        public bool IsStartReady => CurrentSkitStarterObject != null;
-        public SkitStarterObject CurrentSkitStarterObject { get; private set; }
-        
-        private void OnDisable()
-        {
-            startSkitUI.ShowStartStoryUI(false);
-        }
-        
-        private void OnTriggerEnter(Collider other)
-        {
-            if (other.TryGetComponent<SkitStarterObject>(out var storyStarterObject))
-            {
-                CurrentSkitStarterObject = storyStarterObject;
-                startSkitUI.ShowStartStoryUI(true);
-            }
-        }
-        
-        private void OnTriggerExit(Collider other)
-        {
-            if (other.TryGetComponent<SkitStarterObject>(out var _))
-            {
-                CurrentSkitStarterObject = null;
-                startSkitUI.ShowStartStoryUI(false);
-            }
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/WorldSettingJsonObject.cs
-```cs
-using Newtonsoft.Json;
-using UnityEngine;
-
-namespace Game.World.Interface.DataStore
-{
-    public class WorldSettingJsonObject
-    {
-        [JsonProperty("SpawnX")] public int SpawnX;
-        [JsonProperty("SpawnY")] public int SpawnY;
-        
-        public WorldSettingJsonObject(Vector3Int spawnPoint)
-        {
-            SpawnX = spawnPoint.x;
-            SpawnY = spawnPoint.y;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CharacterMotionTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-
-namespace Client.Skit.SkitTrack
-{
-    public class CharacterMotionTrack : IStoryTrack
-    {
-        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
-        {
-            var characterKey = parameters[0];
-            var animationName = parameters[1];
-            
-            var character = storyContext.GetCharacter(characterKey);
-            character.PlayAnimation(animationName);
-            
-            return null;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.MainMenu/StartLocal.cs
-```cs
-using System.Diagnostics;
-using Client.Common;
-using Client.Starter;
-using Cysharp.Threading.Tasks;
-using UnityEngine;
-using UnityEngine.SceneManagement;
-using UnityEngine.UI;
-using Debug = UnityEngine.Debug;
-
-namespace Client.MainMenu
-{
-    public class StartLocal : MonoBehaviour
-    {
-        [SerializeField] private Button startLocalButton;
-        
-        private Process _serverProcess;
-        
-        
-        private void Start()
-        {
-            startLocalButton.onClick.AddListener(() => ConnectLocalServer().Forget());
-        }
-        
-        private async UniTask ConnectLocalServer()
-        {
-            Debug.Log("Server started");
-            
-            SceneManager.sceneLoaded += OnMainGameSceneLoaded;
-            SceneManager.LoadScene(SceneConstant.GameInitializerSceneName);
-        }
-        
-        private void OnMainGameSceneLoaded(Scene scene, LoadSceneMode mode)
-        {
-            SceneManager.sceneLoaded -= OnMainGameSceneLoaded;
-            var starter = FindObjectOfType<InitializeScenePipeline>();
-            
-            starter.SetProperty(new InitializeProprieties(
-                true, _serverProcess,
-                ServerConst.LocalServerIp,
-                ServerConst.LocalServerPort,
-                PlayerPrefs.GetInt(PlayerPrefsKeys.PlayerIdKey)));
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Entity.Interface/EntityInstanceId.cs
-```cs
-using UnitGenerator;
-
-namespace Game.Entity.Interface
-{
-    [UnitOf(typeof(long))]
-    public partial struct EntityInstanceId
-    {
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/UnitTest/Core/Other/UtilTest.cs
-```cs
-using Game.Block;
-using NUnit.Framework;
-
-namespace Tests.UnitTest.Core.Other
-{
-    public class UtilTest
-    {
-        //確立のテストだから1万回繰り返して平均を取る
-        //+-5%なら許容範囲内
-        [TestCase(0.0)]
-        [TestCase(0.1)]
-        [TestCase(0.2)]
-        [TestCase(0.3)]
-        [TestCase(0.3)]
-        [TestCase(0.5)]
-        [TestCase(0.6)]
-        [TestCase(0.7)]
-        [TestCase(0.8)]
-        [TestCase(0.9)]
-        [TestCase(1)]
-        public void DetectFromPercentTest(double percent)
-        {
-            var trueCnt = 0;
-            for (var i = 0; i < 10000; i++)
-                if (ProbabilityCalculator.DetectFromPercent(percent))
-                    trueCnt++;
-            
-            var truePercent = trueCnt / 10000.0;
-            Assert.True(percent - 0.5 < truePercent);
-            Assert.True(truePercent < percent + 0.5);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Entity.Interface/EntityJsonObject.cs
-```cs
-using Newtonsoft.Json;
-using UnityEngine;
-
-namespace Game.Entity.Interface
-{
-    public class EntityJsonObject
-    {
-        [JsonProperty("InstanceId")] public long InstanceId;
-        [JsonProperty("Type")] public string Type;
-        
-        [JsonProperty("X")] public float X;
-        [JsonProperty("Y")] public float Y;
-        [JsonProperty("Z")] public float Z;
-        
-        public EntityJsonObject(string type, long instanceId, Vector3 serverVector3)
-        {
-            Type = type;
-            InstanceId = instanceId;
-            X = serverVector3.x;
-            Y = serverVector3.y;
-            Z = serverVector3.z;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/CameraWarpTrack.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-using UnityEngine;
-
-namespace Client.Skit.SkitTrack
-{
-    public class CameraWarpTrack : IStoryTrack
-    {
-        public async UniTask<string> ExecuteTrack(StoryContext storyContext, List<string> parameters)
-        {
-            var pos = new Vector3(float.Parse(parameters[1]), float.Parse(parameters[2]), float.Parse(parameters[3]));
-            var rot = new Vector3(float.Parse(parameters[5]), float.Parse(parameters[6]), float.Parse(parameters[7]));
-            
-            storyContext.SkitCamera.SetTransform(pos, rot);
-            
-            return null;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/UI/SkitUI.cs
-```cs
-using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-using DG.Tweening;
-using TMPro;
-using UnityEngine;
-
-namespace Client.Skit.UI
-{
-    public class SkitUI : MonoBehaviour
-    {
-        [SerializeField] private GameObject storyPanel;
-        
-        [SerializeField] private TMP_Text characterNameText;
-        [SerializeField] private TMP_Text storyText;
-        
-        [SerializeField] private CanvasGroup transitionImage;
-        
-        [SerializeField] private GameObject selectionPanel;
-        [SerializeField] private List<SelectionButton> selectionButtons;
-        
-        public void SetText(string characterName, string text)
-        {
-            storyPanel.SetActive(true);
-            characterNameText.text = characterName;
-            storyText.text = text.Replace("\\n", "\n");
-        }
-        
-        public void ShowTransition(bool isShow, float duration)
-        {
-            transitionImage.alpha = isShow ? 0 : 1;
-            transitionImage.DOFade(isShow ? 1 : 0, duration);
-        }
-        
-        public void ShowSelectionUI(bool enable)
-        {
-            selectionPanel.SetActive(enable);
-        }
-        
-        public async UniTask<int> WaitSelectText(List<string> texts)
-        {
-            for (var i = 0; i < selectionButtons.Count; i++)
-                if (i < texts.Count)
-                {
-                    selectionButtons[i].SetButton(texts[i], i);
-                    selectionButtons[i].SetActive(true);
-                }
-                else
-                {
-                    selectionButtons[i].SetActive(false);
-                }
-            
-            var cancelToken = this.GetCancellationTokenOnDestroy();
-            
-            var (_, resultIndex) = await UniTask.WhenAny(selectionButtons.Select(button => button.WaitClick(cancelToken)));
-            
-            return resultIndex;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.MainMenu/PopUp/ServerConnectPopup.cs
-```cs
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
-
-namespace Client.MainMenu.PopUp
-{
-    public class ServerConnectPopup : MonoBehaviour
-    {
-        [SerializeField] private TMP_Text logText;
-        [SerializeField] private Button closeButton;
-        
-        private void Start()
-        {
-            closeButton.onClick.AddListener(() =>
-                gameObject.SetActive(false)
-            );
-        }
-        
-        public void SetText(string text)
-        {
-            gameObject.SetActive(true);
-            logText.text = text;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Common/EntityProperties.cs
-```cs
-using Server.Util.MessagePack;
-using UnityEngine;
-
-namespace Client.Common
-{
-    public class EntityProperties
-    {
-        public readonly long InstanceId;
-        public readonly Vector3 Position;
-        public readonly string State;
-        public readonly string Type;
-        
-        public EntityProperties(EntityMessagePack entityMessagePack)
-        {
-            InstanceId = entityMessagePack.InstanceId;
-            Type = entityMessagePack.Type;
-            var x = entityMessagePack.Position.X;
-            var y = entityMessagePack.Position.Y;
-            var z = entityMessagePack.Position.Z;
-            Position = new Vector3(x, y, z);
-            State = entityMessagePack.State;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Challenge/ChallengeTask/BlockPlaceChallengeTask.cs
-```cs
-using System;
-using Game.Context;
-using Game.World.Interface.DataStore;
-using Mooresmaster.Model.ChallengesModule;
-using UniRx;
-
-namespace Game.Challenge.Task
-{
-    public class BlockPlaceChallengeTask : IChallengeTask
-    {
-        public ChallengeMasterElement ChallengeMasterElement { get; }
-        public int PlayerId { get; }
-        
-        public IObservable<IChallengeTask> OnChallengeComplete => _onChallengeComplete;
-        private readonly Subject<IChallengeTask> _onChallengeComplete = new();
-        
-        private bool _completed;
-        
-        public static IChallengeTask Create(int playerId, ChallengeMasterElement challengeMasterElement)
-        {
-            return new BlockPlaceChallengeTask(playerId, challengeMasterElement);
-        }
-        public BlockPlaceChallengeTask(int playerId, ChallengeMasterElement challengeMasterElement)
-        {
-            ChallengeMasterElement = challengeMasterElement;
-            PlayerId = playerId;
-            
-            var worldEvent = ServerContext.WorldBlockUpdateEvent;
-            worldEvent.OnBlockPlaceEvent.Subscribe(OnBlockPlace);
-        }
-        
-        private void OnBlockPlace(BlockUpdateProperties properties)
-        {
-            if (_completed) return;
-            
-            var param = ChallengeMasterElement.TaskParam as BlockPlaceTaskParam;
-            if (param.BlockGuid == properties.BlockData.Block.BlockGuid)
-            {
-                _completed = true;
-                _onChallengeComplete.OnNext(this);
-            }
-        }
-        
-        public void ManualUpdate()
-        {
-            
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.CutScene/TimelinePlayer.cs
-```cs
-using Cysharp.Threading.Tasks;
-using UnityEngine;
-using UnityEngine.Playables;
-
-namespace Client.CutScene
-{
-    public class TimelinePlayer : MonoBehaviour
-    {
-        [SerializeField] private PlayableDirector playableDirector;
-        
-        public async UniTask Play(PlayableAsset playableAsset)
-        {
-            playableDirector.playableAsset = playableAsset;
-            playableDirector.Play();
-            
-            await UniTask.WaitUntil(() => playableDirector.state != PlayState.Playing);
-            
-            playableDirector.playableAsset = null;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/SkitTrack/StoryContext.cs
-```cs
-using System.Collections.Generic;
-using Client.Skit.Define;
-using Client.Skit.Skit;
-using Client.Skit.UI;
-using UnityEngine;
-
-namespace Client.Skit.SkitTrack
-{
-    public class StoryContext
-    {
-        private readonly Dictionary<string, SkitCharacter> _characters;
-        public readonly ISkitCamera SkitCamera;
-        public readonly SkitUI SkitUI;
-        public readonly VoiceDefine VoiceDefine;
-        
-        public StoryContext(SkitUI skitUI, Dictionary<string, SkitCharacter> characters, SkitCamera skitCamera, VoiceDefine voiceDefine)
-        {
-            SkitUI = skitUI;
-            _characters = characters;
-            SkitCamera = skitCamera;
-            VoiceDefine = voiceDefine;
-        }
-        
-        public SkitCharacter GetCharacter(string characterKey)
-        {
-            return _characters[characterKey];
-        }
-        
-        public void DestroyCharacter()
-        {
-            foreach (var character in _characters) Object.Destroy(character.Value.gameObject);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/UI/UIState/PauseMenuState.cs
-```cs
-using Client.Game.InGame.UI.UIState.UIObject;
-using Client.Input;
-
-namespace Client.Game.InGame.UI.UIState
-{
-    public class PauseMenuState : IUIState
-    {
-        private readonly PauseMenuObject _pauseMenu;
-        
-        public PauseMenuState(PauseMenuObject pauseMenu)
-        {
-            _pauseMenu = pauseMenu;
-            pauseMenu.gameObject.SetActive(false);
-        }
-        
-        public UIStateEnum GetNext()
-        {
-            if (InputManager.UI.CloseUI.GetKeyDown) return UIStateEnum.GameScreen;
-            
-            return UIStateEnum.Current;
-        }
-        
-        public void OnEnter(UIStateEnum lastStateEnum)
-        {
-            _pauseMenu.gameObject.SetActive(true);
-            InputManager.MouseCursorVisible(true);
-        }
-        
-        public void OnExit()
-        {
-            _pauseMenu.gameObject.SetActive(false);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/BlockJsonObject.cs
-```cs
-using System;
-using Newtonsoft.Json;
-using UnityEngine;
-
-namespace Game.World.Interface.DataStore
-{
-    public class BlockJsonObject
-    {
-        [JsonProperty("blockGuid")] public string BlockGuidStr;
-        [JsonIgnore] public Guid BlockGuid => Guid.Parse(BlockGuidStr);
-        
-        [JsonProperty("direction")] public int Direction;
-        [JsonProperty("entityId")] public int EntityId;
-        [JsonProperty("state")] public string State;
-        
-        [JsonIgnore] public Vector3Int Pos => new(X, Y, Z);
-        [JsonProperty("X")] public int X;
-        [JsonProperty("Y")] public int Y;
-        [JsonProperty("Z")] public int Z;
-        
-        public BlockJsonObject(Vector3Int pos, string blockGuid, int entityId, string state, int direction)
-        {
-            X = pos.x;
-            Y = pos.y;
-            Z = pos.z;
-            BlockGuidStr = blockGuid;
-            EntityId = entityId;
-            State = state;
-            Direction = direction;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.MainMenu/ResetStoryButton.cs
-```cs
-using Client.Game.Sequence;
-using UnityEngine;
-using UnityEngine.UI;
-
-namespace Client.MainMenu
-{
-    public class ResetStoryButton : MonoBehaviour
-    {
-        [SerializeField] private Button resetStoryButton;
-        
-        private void Start()
-        {
-            resetStoryButton.onClick.AddListener(() =>
-            {
-                PlayerPrefs.DeleteKey(S1InitialMovie.S1InitialMoviePlayerPrefsKey);
-                PlayerPrefs.Save();
-            });
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Entity/IEntityObject.cs
-```cs
-using UnityEngine;
-
-namespace Client.Game.InGame.Entity
-{
-    public interface IEntityObject
-    {
-        public void SetDirectPosition(Vector3 position);
-        public void SetInterpolationPosition(Vector3 position);
-        public void Destroy();
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/UI/SelectionButton.cs
-```cs
-using System.Threading;
-using Cysharp.Threading.Tasks;
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
-
-namespace Client.Skit.UI
-{
-    public class SelectionButton : MonoBehaviour
-    {
-        [SerializeField] private Button button;
-        [SerializeField] private TMP_Text buttonText;
-        
-        private int _index;
-        
-        public void SetButton(string text, int index)
-        {
-            buttonText.text = text;
-            _index = index;
-        }
-        
-        public void SetActive(bool isActive)
-        {
-            gameObject.SetActive(isActive);
-        }
-        
-        public async UniTask<int> WaitClick(CancellationToken ct)
-        {
-            await button.OnClickAsync(ct);
-            return _index;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Editor/DirectoryProcessor.cs
-```cs
-//Credit https://kan-kikuchi.hatenablog.com/entry/DirectoryProcessor
-
-using System.IO;
-
-/// <summary>
-///     ディレクトリを操作するクラス
-/// </summary>
-public static class DirectoryProcessor
-{
-    /// <summary>
-    ///     ディレクトリとその中身を上書きコピー
-    /// </summary>
-    public static void CopyAndReplace(string sourcePath, string copyPath)
-    {
-        //既にディレクトリがある場合は削除し、新たにディレクトリ作成
-        Delete(copyPath);
-        Directory.CreateDirectory(copyPath);
-        
-        //ファイルをコピー
-        foreach (var file in Directory.GetFiles(sourcePath)) File.Copy(file, Path.Combine(copyPath, Path.GetFileName(file)));
-        
-        //ディレクトリの中のディレクトリも再帰的にコピー
-        foreach (var dir in Directory.GetDirectories(sourcePath)) CopyAndReplace(dir, Path.Combine(copyPath, Path.GetFileName(dir)));
-    }
-    
-    /// <summary>
-    ///     指定したディレクトリとその中身を全て削除する
-    /// </summary>
-    public static void Delete(string targetDirectoryPath)
-    {
-        if (!Directory.Exists(targetDirectoryPath)) return;
-        
-        //ディレクトリ以外の全ファイルを削除
-        var filePaths = Directory.GetFiles(targetDirectoryPath);
-        foreach (var filePath in filePaths)
-        {
-            File.SetAttributes(filePath, FileAttributes.Normal);
-            File.Delete(filePath);
-        }
-        
-        //ディレクトリの中のディレクトリも再帰的に削除
-        var directoryPaths = Directory.GetDirectories(targetDirectoryPath);
-        foreach (var directoryPath in directoryPaths) Delete(directoryPath);
-        
-        //中が空になったらディレクトリ自身も削除
-        Directory.Delete(targetDirectoryPath, false);
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Starter/InitializeProprieties.cs
-```cs
-using System.Diagnostics;
-
-namespace Client.Starter
-{
-    public class InitializeProprieties
-    {
-        public readonly bool IsLocal;
-        public readonly Process LocalServerProcess;
-        public readonly int PlayerId;
-        public readonly string ServerIp;
-        public readonly int ServerPort;
-        
-        public InitializeProprieties(bool isLocal, Process localServerProcess, string serverIp, int serverPort, int playerId)
-        {
-            IsLocal = isLocal;
-            LocalServerProcess = localServerProcess;
-            ServerIp = serverIp;
-            ServerPort = serverPort;
-            PlayerId = playerId;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/BlockSystem/PlaceSystem/BlockPlacePreviewObjectPool.cs
-```cs
-using System.Collections.Generic;
-using Client.Game.InGame.Context;
-using Core.Master;
-using UnityEngine;
-
-namespace Client.Game.InGame.BlockSystem.PlaceSystem
-{
-    public class BlockPlacePreviewObjectPool
-    {
-        private readonly Transform _parentTransform;
-        private readonly Dictionary<BlockId, List<PreviewObject>> _blockPreviewObjects = new();
-        
-        public BlockPlacePreviewObjectPool(Transform parentTransform)
-        {
-            _parentTransform = parentTransform;
-        }
-        
-        class PreviewObject
-        {
-            public BlockPreviewObject BlockPreviewObject;
-            public bool IsUsed;
-        }
-        
-        public BlockPreviewObject GetObject(BlockId blockId)
-        {
-            if (!_blockPreviewObjects.ContainsKey(blockId))
-            {
-                _blockPreviewObjects.Add(blockId, new List<PreviewObject>());
-            }
-            
-            var unusedObject = _blockPreviewObjects[blockId].Find(obj => !obj.IsUsed);
-            if (unusedObject == null)
-            {
-                unusedObject = new PreviewObject
-                {
-                    BlockPreviewObject = CreatePreviewObject(blockId),
-                    IsUsed = true
-                };
-                _blockPreviewObjects[blockId].Add(unusedObject);
-            }
-            else
-            {
-                unusedObject.IsUsed = true;
-                unusedObject.BlockPreviewObject.SetActive(true);
-            }
-            
-            return unusedObject.BlockPreviewObject;
-            
-            #region Internal
-            
-            BlockPreviewObject CreatePreviewObject(BlockId id)
-            {
-                var previewBlock = ClientContext.BlockGameObjectContainer.CreatePreviewBlock(id);
-                previewBlock.transform.SetParent(_parentTransform);
-                previewBlock.transform.localPosition = Vector3.zero;
-                
-                return previewBlock;
-            }
-            
-            #endregion
-        }
-        
-        
-        public void AllUnUse()
-        {
-            foreach (var previewObjects in _blockPreviewObjects.Values)
-            {
-                foreach (var previewObject in previewObjects)
-                {
-                    previewObject.IsUsed = false;
-                    previewObject.BlockPreviewObject.SetActive(false);
-                }
-            }
-        }
-        
-        public void AllDestroy()
-        {
-            foreach (var previewObjects in _blockPreviewObjects.Values)
-            {
-                foreach (var previewObject in previewObjects)
-                {
-                    previewObject.BlockPreviewObject.Destroy();
-                }
-            }
-            
-            _blockPreviewObjects.Clear();
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.EventHandler/EnergyEvent/EnergyService/ElectricSegmentMergeService.cs
-```cs
-using System.Collections.Generic;
-using Game.EnergySystem;
-using Game.World.Interface.DataStore;
-
-namespace Game.World.EventHandler.EnergyEvent.EnergyService
-{
-    public static class ElectricSegmentMergeService
-    {
-        /// <summary>
-        ///     電柱に所属するセグメント同士をマージし、データストアにセットするシステム
-        /// </summary>
-        /// <param name="segmentDatastore"></param>
-        /// <param name="poles">マージしたい電柱</param>
-        /// <returns></returns>
-        public static EnergySegment MergeAndSetDatastoreElectricSegments<TSegment>(
-            IWorldEnergySegmentDatastore<TSegment> segmentDatastore, List<IElectricTransformer> poles)
-            where TSegment : EnergySegment, new()
-        {
-            //電力セグメントをリストアップ
-            var electricSegments = new List<TSegment>();
-            foreach (var pole in poles)
-            {
-                var electricSegment = segmentDatastore.GetEnergySegment(pole);
-                electricSegments.Add(electricSegment);
-            }
-            
-            //電力セグメントをマージする
-            var mergedElectricSegment = EnergySegmentExtension.Merge(electricSegments);
-            //マージ前のセグメントを削除する
-            for (var i = 0; i < electricSegments.Count; i++)
-            {
-                segmentDatastore.RemoveEnergySegment(electricSegments[i]);
-                electricSegments[i] = null;
-            }
-            
-            //マージ後のセグメントを追加する
-            segmentDatastore.SetEnergySegment(mergedElectricSegment);
-            
-            return mergedElectricSegment;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Skit/Skit/SkitCharacter.cs
-```cs
-using System.Collections.Generic;
-using Client.Skit.SkitTrack;
-using DG.Tweening;
-using UnityEngine;
-
-namespace Client.Skit.Skit
-{
-    public class SkitCharacter : MonoBehaviour
-    {
-        [SerializeField] private AudioSource voiceAudioSource;
-        [SerializeField] private SkinnedMeshRenderer faceSkinnedMeshRenderer;
-        [SerializeField] private Animator animator;
-        
-        public void Initialize(Transform parent, string name)
-        {
-            gameObject.name = name + " (StoryCharacter)";
-            transform.SetParent(parent);
-        }
-        
-        public void SetTransform(Vector3 position, Vector3 rotation)
-        {
-            transform.position = position;
-            transform.eulerAngles = rotation;
-        }
-        
-        public void PlayAnimation(string animationName)
-        {
-            animator.SetTrigger(animationName);
-        }
-        
-        public void PlayVoice(AudioClip voiceClip)
-        {
-            voiceAudioSource.clip = voiceClip;
-            voiceAudioSource.Play();
-        }
-        
-        public void StopVoice()
-        {
-            voiceAudioSource.Stop();
-        }
-        
-        public void SetEmotion(EmotionType emotion, float duration)
-        {
-            var blendShapeData = ToBlendShapeData(emotion);
-            
-            // Tween BlendShape
-            foreach (var (key, value) in blendShapeData)
-                DOTween.To(
-                    () => faceSkinnedMeshRenderer.GetBlendShapeWeight(key),
-                    x => faceSkinnedMeshRenderer.SetBlendShapeWeight(key, x),
-                    value,
-                    duration);
-            
-            #region Internal
-            
-            Dictionary<int, float> ToBlendShapeData(EmotionType emotionType)
-            {
-                return emotionType switch
-                {
-                    EmotionType.Normal => new Dictionary<int, float> { { 11, 0f } },
-                    EmotionType.Happy => new Dictionary<int, float> { { 11, 100 } },
-                };
-            }
-            
-            #endregion
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Presenter/Command/CommandUIInput.cs
-```cs
-using Client.Game.InGame.Context;
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
-
-namespace Client.Game.InGame.Presenter.Command
-{
-    public class CommandUIInput : MonoBehaviour
-    {
-        [SerializeField] private TMP_InputField commandInputField;
-        [SerializeField] private Button submitButton;
-        
-        
-        private void Start()
-        {
-            submitButton.onClick.AddListener(SubmitCommand);
-        }
-        
-        private void SubmitCommand()
-        {
-            ClientContext.VanillaApi.SendOnly.SendCommand(commandInputField.text);
-            commandInputField.text = string.Empty;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Presenter/PauseMenu/NetworkDisconnectPresenter.cs
-```cs
-using Client.Common;
-using Client.Game.InGame.Context;
-using UniRx;
-using UnityEngine;
-using UnityEngine.SceneManagement;
-using UnityEngine.UI;
-
-namespace Client.Game.InGame.Presenter.PauseMenu
-{
-    public class NetworkDisconnectPresenter : MonoBehaviour
-    {
-        [SerializeField] private GameObject disconnectPanel;
-        
-        [SerializeField] private Button goToMainMenuButton;
-        
-        private void Start()
-        {
-            ClientContext.VanillaApi.OnDisconnect.Subscribe(_ => { disconnectPanel.gameObject.SetActive(true); }).AddTo(this);
-            goToMainMenuButton.onClick.AddListener(() => { SceneManager.LoadScene(SceneConstant.MainMenuSceneName); });
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Entity.Interface/IEntity.cs
-```cs
-using UnityEngine;
-
-namespace Game.Entity.Interface
-{
-    public interface IEntity
-    {
-        EntityInstanceId InstanceId { get; }
-        string EntityType { get; }
-        
-        Vector3 Position { get; }
-        
-        string State { get; }
-        
-        void SetPosition(Vector3 serverVector3);
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Gear/Common/GearPower.cs
-```cs
-using UnitGenerator;
-
-namespace Game.Gear.Common
-{
-    [UnitOf(typeof(float), UnitGenerateOptions.ArithmeticOperator | UnitGenerateOptions.ValueArithmeticOperator | UnitGenerateOptions.Comparable)]
-    public partial struct GearPower
-    {
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Common/MaterialConst.cs
-```cs
-using UnityEngine;
-
-namespace Client.Common
-{
-    public class MaterialConst
-    {
-        public const string PlaceBlockAnimationMaterial = "PlaceBlockAnimation";
-        
-        public const string PreviewPlaceBlockMaterial = "PreviewPlaceBlock";
-        
-        public static readonly Color PlaceableColor = new(0.41f,0.59f,0.86f,1f);
-        public static readonly Color NotPlaceableColor = new(0.9f,0.25f,0.16f,1);
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Map.Interface/Json/MapInfoJson.cs
-```cs
-using System;
-using System.Collections.Generic;
-using Newtonsoft.Json;
-using UnityEngine;
-
-namespace Game.Map.Interface.Json
-{
-    public class MapInfoJson
-    {
-        [JsonProperty("mapObjects")] public List<MapObjectInfoJson> MapObjects;
-        [JsonProperty("mapVeins")] public List<MapVeinInfoJson> MapVeins;
-    }
-    
-    public class MapObjectInfoJson
-    {
-        [JsonProperty("instanceId")] public int InstanceId;
-        [JsonProperty("mapObjectGuid")] public string MapObjectGuidStr;
-        [JsonIgnore] public Guid MapObjectGuid => new(MapObjectGuidStr);
-        
-        [JsonProperty("x")] public float X;
-        [JsonProperty("y")] public float Y;
-        [JsonProperty("z")] public float Z;
-        
-        [JsonIgnore] public Vector3 Position => new(X, Y, Z);
-    }
-    
-    public class MapVeinInfoJson
-    {
-        [JsonProperty("veinItemGuid")] public string VeinItemGuidStr;
-        [JsonIgnore] public Guid VeinItemGuid => Guid.Parse(VeinItemGuidStr);
-        
-        [JsonProperty("xMax")] public int XMax;
-        
-        [JsonProperty("xMin")] public int XMin;
-        [JsonProperty("yMax")] public int YMax;
-        [JsonProperty("yMin")] public int YMin;
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Entity/EntityFactory.cs
-```cs
-using System.Collections.Generic;
-using Game.Entity.Interface;
-using Game.Entity.Interface.EntityInstance;
-using UnityEngine;
-
-namespace Game.Entity
-{
-    public class EntityFactory : IEntityFactory
-    {
-        public IEntity CreateEntity(string entityType, EntityInstanceId instanceId, Vector3 position = default)
-        {
-            if (entityType == VanillaEntityType.VanillaPlayer) return new PlayerEntity(instanceId, position);
-            
-            if (entityType == VanillaEntityType.VanillaItem) return new ItemEntity(instanceId, position);
-            
-            throw new KeyNotFoundException("Entity type not found : " + entityType);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.MainMenu/QuitGame.cs
-```cs
-using UnityEngine;
-using UnityEngine.UI;
-
-namespace Client.MainMenu
-{
-    public class QuitGame : MonoBehaviour
-    {
-        [SerializeField] private Button quitButton;
-        
-        private void Awake()
-        {
-            quitButton.onClick.AddListener(Application.Quit);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Server.Util/PacketBufferParser.cs
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/MachineIOTest.cs
 ```cs
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
-namespace Server.Util
-{
-    /// <summary>
-    ///     複数のパケットがバッファーに入っていた場合にそれらのパケットを別々のパケットに分割するクラス
-    /// </summary>
-    public class PacketBufferParser
-    {
-        private readonly List<byte> _packetLengthBytes = new();
-        private List<byte> _continuationFromLastTimeBytes = new();
-        
-        private bool _isGettingLength;
-        private int _nextPacketLengthOffset;
-        private int _packetLength;
-        private int _remainingHeaderLength;
-        
-        public List<List<byte>> Parse(byte[] packet, int length)
-        {
-            //プロトコル長から実際のプロトコルを作る
-            var actualStartPacketDataIndex = 0;
-            var reminderLength = length;
-            
-            var result = new List<List<byte>>();
-            
-            //受信したパケットの最後までループ
-            while (0 < reminderLength)
-            {
-                //前回からの続きのデータがない場合
-                if (_continuationFromLastTimeBytes.Count == 0)
-                {
-                    //パケット長を取得
-                    if (TryGetLength(packet, actualStartPacketDataIndex, out var payloadLength, out var headerLength))
-                    {
-                        _packetLength = payloadLength;
-                        //パケット長のshort型の4バイトを取り除く
-                        reminderLength -= _packetLength + headerLength;
-                        actualStartPacketDataIndex += headerLength;
-                    }
-                    else
-                    {
-                        //残りバッファサイズ的に取得できない場合は次回の受信で取得する
-                        break;
-                    }
-                }
-                else
-                {
-                    //前回からの続きのデータがある場合
-                    _packetLength -= _nextPacketLengthOffset;
-                    reminderLength = length - _packetLength;
-                }
-                
-                //パケットが切れているので、残りのデータを一時保存
-                if (reminderLength < 0)
-                {
-                    var addCollection = packet.Skip(actualStartPacketDataIndex).ToList();
-                    _continuationFromLastTimeBytes.AddRange(addCollection);
-                    //次回の受信のためにどこからデータを保存するかのオフセットを保存
-                    _nextPacketLengthOffset = length - actualStartPacketDataIndex;
-                    break;
-                }
-                
-                //パケットの長さ分だけデータを取得
-                for (var i = 0;
-                     i < _packetLength && actualStartPacketDataIndex < length;
-                     actualStartPacketDataIndex++, i++)
-                    _continuationFromLastTimeBytes.Add(packet[actualStartPacketDataIndex]);
-                
-                result.Add(_continuationFromLastTimeBytes);
-                //受信したパケットに対する応答を返す
-                _continuationFromLastTimeBytes = new List<byte>();
-            }
-            
-            return result;
-        }
-        
-        
-        private bool TryGetLength(byte[] bytes, int startIndex, out int payloadLength, out int headerLength)
-        {
-            List<byte> headerBytes;
-            if (_isGettingLength)
-            {
-                headerLength = _remainingHeaderLength;
-                for (var i = 0; i < _remainingHeaderLength; i++) _packetLengthBytes.Add(bytes[i]);
-                headerBytes = _packetLengthBytes;
-                _isGettingLength = false;
-            }
-            else
-            {
-                payloadLength = -1;
-                headerLength = -1;
-                //パケット長が取得でききれない場合
-                if (bytes.Length <= startIndex + 3)
-                {
-                    _packetLengthBytes.Clear();
-                    _remainingHeaderLength = 4;
-                    for (var i = startIndex; i < bytes.Length; i++)
-                    {
-                        _remainingHeaderLength = 3 - (i - startIndex);
-                        _packetLengthBytes.Add(bytes[i]);
-                    }
-                    
-                    _isGettingLength = true;
-                    return false;
-                }
-                
-                headerLength = 4;
-                headerBytes = new List<byte>
-                {
-                    bytes[startIndex],
-                    bytes[startIndex + 1],
-                    bytes[startIndex + 2],
-                    bytes[startIndex + 3],
-                };
-            }
-            
-            
-            if (BitConverter.IsLittleEndian) headerBytes.Reverse();
-            
-            payloadLength = BitConverter.ToInt32(headerBytes.ToArray(), 0);
-            return true;
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.DebugSystem/CharacterTestDebug.cs
-```cs
-using System;
-using Client.Game.InGame.Control;
-using UnityEngine;
-
-namespace Client.DebugSystem
-{
-    public class CharacterTestDebug : MonoBehaviour
-    {
-        [SerializeField] private InGameCameraController _cameraController;
-        
-        private void Start()
-        {
-            _cameraController.SetControllable(true);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Input/HotBarKeyBoardComposite.cs
-```cs
-using UnityEditor;
-using UnityEngine;
-using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.Layouts;
-using UnityEngine.InputSystem.Utilities;
-#if UNITY_EDITOR
-#endif
-
-namespace Client.Input
-{
-#if UNITY_EDITOR
-    [InitializeOnLoad]
-#endif
-    [DisplayStringFormat("{select0}/{select1}/{select2}/{select3}/{select4}/{select5}/{select6}/{select7}/{select8}")]
-    public class HotBarKeyBoardComposite : InputBindingComposite<int>
-    {
-        [InputControl(layout = "Button")] public int select0 = 1;
-        [InputControl(layout = "Button")] public int select1 = 2;
-        [InputControl(layout = "Button")] public int select2 = 3;
-        [InputControl(layout = "Button")] public int select3 = 4;
-        [InputControl(layout = "Button")] public int select4 = 5;
-        [InputControl(layout = "Button")] public int select5 = 6;
-        [InputControl(layout = "Button")] public int select6 = 7;
-        [InputControl(layout = "Button")] public int select7 = 8;
-        [InputControl(layout = "Button")] public int select8 = 9;
-#if UNITY_EDITOR
-        static HotBarKeyBoardComposite()
-        {
-            Initialize();
-        }
-#endif
-        
-        [RuntimeInitializeOnLoadMethod]
-        private static void Initialize()
-        {
-            InputSystem.RegisterBindingComposite<HotBarKeyBoardComposite>();
-        }
-        
-        public override int ReadValue(ref InputBindingCompositeContext context)
-        {
-            if (context.ReadValueAsButton(select0)) return select0;
-            if (context.ReadValueAsButton(select1)) return select1;
-            if (context.ReadValueAsButton(select2)) return select2;
-            if (context.ReadValueAsButton(select3)) return select3;
-            if (context.ReadValueAsButton(select4)) return select4;
-            if (context.ReadValueAsButton(select5)) return select5;
-            if (context.ReadValueAsButton(select6)) return select6;
-            if (context.ReadValueAsButton(select7)) return select7;
-            if (context.ReadValueAsButton(select8)) return select8;
-            
-            return 0;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/IWorldSettingsDatastore.cs
-```cs
-using UnityEngine;
-
-namespace Game.World.Interface.DataStore
-{
-    public interface IWorldSettingsDatastore
-    {
-        public Vector3Int WorldSpawnPoint { get; }
-        
-        public WorldSettingJsonObject GetSaveJsonObject();
-        public void Initialize();
-        public void LoadSettingData(WorldSettingJsonObject worldSettingJsonObject);
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Network/API/VanillaApiEvent.cs
-```cs
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using Client.Network.Settings;
-using Cysharp.Threading.Tasks;
-using Server.Protocol;
-using Server.Protocol.PacketResponse;
-using UnityEngine;
-
-namespace Client.Network.API
-{
-    public class VanillaApiEvent
-    {
-        private readonly Dictionary<string, Action<byte[]>> _eventResponseInfos = new();
-        private readonly PacketExchangeManager _packetExchangeManager;
-        private readonly PlayerConnectionSetting _playerConnectionSetting;
-        
-        public VanillaApiEvent(PacketExchangeManager packetExchangeManager, PlayerConnectionSetting playerConnectionSetting)
-        {
-            _packetExchangeManager = packetExchangeManager;
-            _playerConnectionSetting = playerConnectionSetting;
-            CollectEvent().Forget();
-        }
-        
-        private async UniTask CollectEvent()
-        {
-            while (true)
-            {
-                var ct = new CancellationTokenSource().Token;
-                
-                try
-                {
-                    await RequestAndParse(ct);
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Event Protocol Error:{e.Message}\n{e.StackTrace}");
-                }
-                
-                await UniTask.Delay(ServerConst.PollingRateMillSec, cancellationToken: ct);
-            }
-            
-            #region Internal
-            
-            async UniTask RequestAndParse(CancellationToken ct)
-            {
-                var request = new EventProtocolMessagePack(_playerConnectionSetting.PlayerId);
-                
-                var response = await _packetExchangeManager.GetPacketResponse<ResponseEventProtocolMessagePack>(request, ct);
-                
-                foreach (var eventMessagePack in response.Events)
-                    if (_eventResponseInfos.TryGetValue(eventMessagePack.Tag, out var action))
-                        action(eventMessagePack.Payload);
-            }
-            
-            #endregion
-        }
-        
-        public void RegisterEventResponse(string tag, Action<byte[]> responseAction)
-        {
-            _eventResponseInfos.Add(tag, responseAction);
-        }
-        
-        public void UnRegisterEventResponse(string tag)
-        {
-            _eventResponseInfos.Remove(tag);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Block/RendererMaterialReplacerController.cs
-```cs
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-
-namespace Client.Game.InGame.Block
-{
-    public class RendererMaterialReplacerController
-    {
-        private readonly List<RendererMaterialReplacer> _rendererMaterialReplacers;
-        
-        public RendererMaterialReplacerController(GameObject targetObject)
-        {
-            _rendererMaterialReplacers = new List<RendererMaterialReplacer>();
-            foreach (var renderer in targetObject.GetComponentsInChildren<Renderer>())
-            {
-                _rendererMaterialReplacers.Add(new RendererMaterialReplacer(renderer));
-            }
-        }
-        
-        public void CopyAndSetMaterial(Material placeMaterial)
-        {
-            _rendererMaterialReplacers.ForEach(replacer => replacer.CopyAndSetMaterial(placeMaterial));
-        }
-        
-        public void SetPlaceMaterialProperty(string propertyName, float value)
-        {
-            _rendererMaterialReplacers.ForEach(replacer => replacer.SetPlaceMaterialProperty(propertyName, value));
-        }
-        
-        public void SetColor(Color color)
-        {
-            _rendererMaterialReplacers.ForEach(replacer => replacer.SetColor(color));
-        }
-        
-        public void ResetMaterial()
-        {
-            _rendererMaterialReplacers.ForEach(replacer => replacer.ResetMaterial());
-        }
-        
-        public void DestroyMaterial()
-        {
-            _rendererMaterialReplacers.ForEach(replacer => replacer.DestroyMaterial());
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Extension/BlockMasterExtension.cs
-```cs
-using System;
-using Core.Master;
-
-namespace Game.Block.Interface.Extension
-{
-    public static class BlockMasterExtension
-    {
-        public static BlockId GetVerticalOverrideBlockId(this BlockId blockId,BlockVerticalDirection verticalDirection)
-        {
-            var blockElement = MasterHolder.BlockMaster.GetBlockMaster(blockId);
-            var overrideBlock = blockElement.OverrideVerticalBlock;
-            if (overrideBlock == null)
-            {
-                return blockId;
-            }
-            
-            if (verticalDirection is BlockVerticalDirection.Up && overrideBlock.UpBlockGuid != Guid.Empty)
-            {
-                return MasterHolder.BlockMaster.GetBlockId(overrideBlock.UpBlockGuid);
-            }
-            if (verticalDirection is BlockVerticalDirection.Horizontal && overrideBlock.HorizontalBlockGuid != Guid.Empty)
-            {
-                return MasterHolder.BlockMaster.GetBlockId(overrideBlock.HorizontalBlockGuid);
-            }
-            if (verticalDirection is  BlockVerticalDirection.Down && overrideBlock.DownBlockGuid != Guid.Empty)
-            {
-                return MasterHolder.BlockMaster.GetBlockId(overrideBlock.DownBlockGuid);
-            }
-            
-            return blockId;
-        }
-        
-        public static BlockId GetVerticalOverrideBlockId(this Guid blockGuid,BlockVerticalDirection verticalDirection)
-        {
-            var blockId = MasterHolder.BlockMaster.GetBlockId(blockGuid);
-            return blockId.GetVerticalOverrideBlockId(verticalDirection);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Define/BlockPrefabContainer.cs
-```cs
-using System;
-using System.Collections.Generic;
-using Client.Common;
+using System.Reflection;
 using Core.Const;
+using Core.Item.Interface;
 using Core.Master;
-using Game.Context;
-using Mooresmaster.Model.BlocksModule;
-using UnityEngine;
-
-namespace Client.Game.InGame.Define
-{
-    [CreateAssetMenu(fileName = "BlockPrefabContainer", menuName = "moorestech/BlockPrefabContainer", order = 0)]
-    public class BlockPrefabContainer : ScriptableObject
-    {
-        [SerializeField] private List<BlockPrefabInfo> blockPrefabs;
-        
-        public Dictionary<BlockId,BlockObjectInfo> GetBlockDataList()
-        {
-            var result = new Dictionary<BlockId,BlockObjectInfo>();
-            
-            foreach (var blockId in MasterHolder.BlockMaster.GetBlockIds())
-            {
-                var blockMasterElement = MasterHolder.BlockMaster.GetBlockMaster(blockId);
-                
-                var blockPrefab = GetBlockPrefab(blockMasterElement.BlockGuid);
-                if (blockPrefab == null) continue;
-                
-                result.Add(blockId, new BlockObjectInfo(blockPrefab, blockMasterElement));
-            }
-            
-            return result;
-        }
-        
-        private GameObject GetBlockPrefab(Guid blockGuid)
-        {
-            foreach (var blockPrefab in blockPrefabs)
-                if (blockPrefab.BlockGuid == blockGuid.ToString())
-                    return blockPrefab.BlockPrefab;
-            return null;
-        }
-    }
-    
-    [Serializable]
-    public class BlockPrefabInfo
-    {
-        public string BlockGuid => blockGuid;
-        public GameObject BlockPrefab => blockPrefab;
-        
-        [SerializeField] private string blockGuid;
-        [SerializeField] private GameObject blockPrefab;
-    }
-    
-    
-    
-    public class BlockObjectInfo
-    {
-        public readonly BlockMasterElement BlockMasterElement;
-        public readonly GameObject BlockObject;
-        
-        public BlockObjectInfo(GameObject blockObject, BlockMasterElement blockMasterElement)
-        {
-            BlockObject = blockObject;
-            BlockMasterElement = blockMasterElement;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Entity.Interface/IEntitiesDatastore.cs
-```cs
-using System.Collections.Generic;
-using UnityEngine;
-
-namespace Game.Entity.Interface
-{
-    public interface IEntitiesDatastore
-    {
-        public void Add(IEntity entity);
-        public bool Exists(EntityInstanceId instanceId);
-        public IEntity Get(EntityInstanceId instanceId);
-        
-        public void SetPosition(EntityInstanceId instanceId, Vector3 position);
-        
-        public Vector3 GetPosition(EntityInstanceId instanceId);
-        
-        
-        public List<EntityJsonObject> GetSaveJsonObject();
-        public void LoadBlockDataList(List<EntityJsonObject> saveBlockDataList);
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/BlockException.cs
-```cs
-using System;
-using Game.Block.Interface.Component;
-
-namespace Game.Block.Interface
-{
-    public static class BlockException
-    {
-        private const string IsDestroyed = "This component is already destroyed";
-        private static readonly InvalidOperationException IsDestroyedException = new(IsDestroyed);
-        
-        public static void CheckDestroy(IBlockComponent blockComponent)
-        {
-            if (blockComponent.IsDestroy)
-            {
-                throw IsDestroyedException;
-            }
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/UI/UIState/UIStateDictionary.cs
-```cs
-using System.Collections.Generic;
-
-namespace Client.Game.InGame.UI.UIState
-{
-    public class UIStateDictionary
-    {
-        private readonly Dictionary<UIStateEnum, IUIState> _stateDictionary = new();
-        
-        public UIStateDictionary(
-            GameScreenState gameScreenState,
-            PlayerInventoryState playerInventoryState,
-            BlockInventoryState blockInventoryState,
-            PauseMenuState pauseMenuState,
-            DeleteBlockState deleteBlockState,
-            SkitState skitState,
-            PlaceBlockState placeBlockState)
-        {
-            _stateDictionary.Add(UIStateEnum.GameScreen, gameScreenState);
-            _stateDictionary.Add(UIStateEnum.PlayerInventory, playerInventoryState);
-            _stateDictionary.Add(UIStateEnum.BlockInventory, blockInventoryState);
-            _stateDictionary.Add(UIStateEnum.PauseMenu, pauseMenuState);
-            _stateDictionary.Add(UIStateEnum.DeleteBar, deleteBlockState);
-            _stateDictionary.Add(UIStateEnum.Story, skitState);
-            _stateDictionary.Add(UIStateEnum.PlaceBlock, placeBlockState);
-        }
-        
-        public IUIState GetState(UIStateEnum state)
-        {
-            return _stateDictionary[state];
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Gear/Common/GearStateData.cs
-```cs
-using MessagePack;
-
-namespace Game.Gear.Common
-{
-    [MessagePackObject]
-    public class GearStateData
-    {
-        public GearStateData(float currentRpm, bool isClockwise)
-        {
-            CurrentRpm = currentRpm;
-            IsClockwise = isClockwise;
-        }
-        
-        [Key(0)] public float CurrentRpm { get; set; }
-        
-        [Key(1)] public bool IsClockwise { get; set; }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/Skit/Starter/StartSkitUI.cs
-```cs
-using UnityEngine;
-
-namespace Client.Game.Skit.Starter
-{
-    public class StartSkitUI : MonoBehaviour
-    {
-        [SerializeField] private GameObject startStoryPanel;
-        
-        public void ShowStartStoryUI(bool enable)
-        {
-            startStoryPanel.SetActive(enable);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IUpdatableBlockComponent.cs
-```cs
-namespace Game.Block.Interface.Component
-{
-    public interface IUpdatableBlockComponent : IBlockComponent
-    {
-        public void Update();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Entity.Interface/EntityInstance/PlayerEntity.cs
-```cs
-using UnityEngine;
-
-namespace Game.Entity.Interface.EntityInstance
-{
-    public class PlayerEntity : IEntity
-    {
-        public PlayerEntity(EntityInstanceId instanceId, Vector3 position)
-        {
-            InstanceId = instanceId;
-            Position = position;
-        }
-        
-        public Vector3 Position { get; private set; }
-        
-        public EntityInstanceId InstanceId { get; }
-        public string EntityType => VanillaEntityType.VanillaPlayer;
-        public string State => string.Empty;
-        
-        public void SetPosition(Vector3 serverVector3)
-        {
-            Position = serverVector3;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World/WorldBlockUpdateEvent.cs
-```cs
-using System;
+using Core.Update;
+using Game.Block.Blocks.Machine;
+using Game.Block.Blocks.Machine.Inventory;
+using Game.Block.Interface;
 using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.EnergySystem;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.CombinedTest.Core
+{
+    public class MachineIOTest
+    {
+        //アイテムが通常通り処理されるかのテスト
+        [Test]
+        public void ItemProcessingOutputTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var recipe = MasterHolder.MachineRecipesMaster.MachineRecipes.Data[0];
+            
+            
+            var blockId = MasterHolder.BlockMaster.GetBlockId(recipe.BlockGuid);
+            var block = blockFactory.Create(blockId, new BlockInstanceId(1), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var blockInventory = block.GetComponent<VanillaMachineBlockInventoryComponent>();
+            foreach (var inputItem in recipe.InputItems)
+            {
+                blockInventory.InsertItem(itemStackFactory.Create(inputItem.ItemGuid, inputItem.Count));
+            }
+            
+            var blockMachineComponent = block.GetComponent<VanillaElectricMachineComponent>();
+            
+            var craftTime = DateTime.Now.AddSeconds(recipe.Time);
+            //最大クラフト時間を超過するまでクラフトする
+            while (craftTime.AddSeconds(0.2).CompareTo(DateTime.Now) == 1)
+            {
+                blockMachineComponent.SupplyEnergy(new ElectricPower(10000));
+                GameUpdater.UpdateWithWait();
+            }
+            
+            //検証
+            (List<IItemStack> input, List<IItemStack> output) = GetInputOutputSlot(blockInventory);
+            
+            Assert.AreEqual(0, input.Count);
+            foreach (var inputItem in input) Assert.AreEqual(ItemMaster.EmptyItemId, inputItem.Id);
+            
+            Assert.AreNotEqual(0, output.Count);
+            for (var i = 0; i < output.Count; i++)
+            {
+                var expectedOutputId = MasterHolder.ItemMaster.GetItemId(recipe.OutputItems[i].ItemGuid);
+                Assert.AreEqual(expectedOutputId, output[i].Id);
+                Assert.AreEqual(recipe.OutputItems[i].Count, output[i].Count);
+            }
+        }
+        
+        public (List<IItemStack>, List<IItemStack>) GetInputOutputSlot(VanillaMachineBlockInventoryComponent vanillaMachineInventory)
+        {
+            var vanillaMachineInputInventory = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(vanillaMachineInventory);
+            var vanillaMachineOutputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(vanillaMachineInventory);
+            
+            var inputSlot = vanillaMachineInputInventory.InputSlot.Where(i => i.Count != 0).ToList();
+            inputSlot.Sort((a, b) => a.Id.AsPrimitive() - b.Id.AsPrimitive());
+            
+            var outputSlot = vanillaMachineOutputInventory.OutputSlot.Where(i => i.Count != 0).ToList();
+            outputSlot.Sort((a, b) => a.Id.AsPrimitive() - b.Id.AsPrimitive());
+            
+            return (inputSlot, outputSlot);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block/Blocks/Miner/VanillaGearMinerComponent.cs
+```cs
+using Game.Block.Blocks.Gear;
+using Game.Block.Interface.Component;
+using Game.Gear.Common;
+using Mooresmaster.Model.BlocksModule;
+using Mooresmaster.Model.MineSettingsModule;
+using UniRx;
+
+namespace Game.Block.Blocks.Miner
+{
+    public class VanillaGearMinerComponent : IBlockComponent
+    {
+        private readonly GearEnergyTransformer _gearEnergyTransformer;
+        private readonly VanillaMinerProcessorComponent _vanillaMinerProcessorComponent;
+        private readonly GearMinerBlockParam _gearMinerBlockParam;
+        
+        public VanillaGearMinerComponent(VanillaMinerProcessorComponent vanillaMinerProcessorComponent, GearEnergyTransformer gearEnergyTransformer)
+        {
+            _vanillaMinerProcessorComponent = vanillaMinerProcessorComponent;
+            _gearEnergyTransformer = gearEnergyTransformer;
+            _gearEnergyTransformer.OnGearUpdate.Subscribe(OnGearUpdate);
+        }
+        
+        private void OnGearUpdate(GearUpdateType gearUpdateType)
+        {
+            var requiredRpm = new RPM(_gearMinerBlockParam.RequiredRpm);
+            var requireTorque = new Torque(_gearMinerBlockParam.RequireTorque);
+            
+            var currentElectricPower = _gearEnergyTransformer.CalcMachineSupplyPower(requiredRpm, requireTorque);
+            _vanillaMinerProcessorComponent.SupplyPower(currentElectricPower);
+        }
+        
+        public bool IsDestroy { get; private set; }
+        public void Destroy()
+        {
+            IsDestroy = true;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/UnitTest/Game/SaveLoad/GearMachineSaveLoadTest.cs
+```cs
+using System.Reflection;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Gear;
+using Game.Block.Blocks.Machine;
+using Game.Block.Blocks.Machine.Inventory;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Gear.Common;
+using Game.PlayerInventory;
+using Game.SaveLoad.Interface;
+using Game.SaveLoad.Json;
 using Game.World.Interface.DataStore;
+using Microsoft.Extensions.DependencyInjection;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.UnitTest.Game.SaveLoad
+{
+    public class GearMachineSaveLoadTest
+    {
+        //ギア機械のインベントリのあるブロックを追加した時のテスト
+        //レシピやブロックが変わった時はテストコードを修正してください
+        [Test]
+        public void InventoryBlockTest()
+        {
+            //機械の追加
+            var (blockFactory, worldBlockDatastore, _, assembleSaveJsonText, _) = CreateBlockTestModule();
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.GearMachine, new Vector3Int(0, 0), BlockDirection.North, out var gearMachineBlock);
+            var machineInventory = gearMachineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            
+            
+            //レシピ用のアイテムを追加
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(1), 3));
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 1));
+            
+            //処理を開始
+            gearMachineBlock.GetComponent<GearEnergyTransformer>().SupplyPower(new RPM(1000), new Torque(1000), true);
+            GameUpdater.UpdateWithWait();
+            //別のアイテムを追加
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(5), 6));
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 4));
+            
+            //リフレクションで機械の状態を設定
+            //機械のレシピの残り時間設定
+            var vanillaMachineProcessor = gearMachineBlock.GetComponent<VanillaMachineProcessorComponent>();
+            //ステータスをセット
+            typeof(VanillaMachineProcessorComponent)
+                .GetProperty("RemainingSecond")
+                .SetValue(vanillaMachineProcessor, 0.3);
+            typeof(VanillaMachineProcessorComponent)
+                .GetProperty("CurrentState")
+                .SetValue(vanillaMachineProcessor, ProcessState.Processing);
+            
+            //機械のアウトプットスロットの設定
+            var outputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(machineInventory);
+            
+            outputInventory.SetItem(1, itemStackFactory.Create(new ItemId(1), 1));
+            outputInventory.SetItem(2, itemStackFactory.Create(new ItemId(3), 2));
+            
+            //レシピIDを取得
+            var recipeId = vanillaMachineProcessor.RecipeGuid;
+            
+            var json = assembleSaveJsonText.AssembleSaveJson();
+            Debug.Log(json);
+            //配置したブロックを削除
+            worldBlockDatastore.RemoveBlock(new Vector3Int(0, 0));
+            
+            
+            //ロードした時に機械の状態が正しいことを確認
+            var (_, loadWorldBlockDatastore, _, _, loadJsonFile) = CreateBlockTestModule();
+            
+            loadJsonFile.Load(json);
+            
+            var loadMachineBlock = loadWorldBlockDatastore.GetBlock(new Vector3Int(0, 0));
+            
+            //ブロックID、intIDが同じであることを確認
+            Assert.AreEqual(gearMachineBlock.BlockId, loadMachineBlock.BlockId);
+            Assert.AreEqual(gearMachineBlock.BlockInstanceId, loadMachineBlock.BlockInstanceId);
+            
+            
+            //機械のレシピの残り時間のチェック
+            var machineProcessor = loadMachineBlock.GetComponent<VanillaMachineProcessorComponent>();
+            Assert.AreEqual(0.3, machineProcessor.RemainingSecond);
+            //レシピIDのチェック
+            Assert.AreEqual(recipeId, machineProcessor.RecipeGuid);
+            //機械のステータスのチェック
+            Assert.AreEqual(ProcessState.Processing, machineProcessor.CurrentState);
+            
+            
+            var loadMachineInventory = loadMachineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            //インプットスロットのチェック
+            var inputInventoryField = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadMachineInventory);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(5), 6), inputInventoryField.InputSlot[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(2), 4), inputInventoryField.InputSlot[1]);
+            
+            //アウトプットスロットのチェック
+            var outputInventoryField = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadMachineInventory);
+            Assert.AreEqual(itemStackFactory.CreatEmpty(), outputInventoryField.OutputSlot[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(1), 1), outputInventoryField.OutputSlot[1]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(3), 2), outputInventoryField.OutputSlot[2]);
+        }
+        
+        private (IBlockFactory, IWorldBlockDatastore, PlayerInventoryDataStore, AssembleSaveJsonText, WorldLoaderFromJson)
+            CreateBlockTestModule()
+        {
+            var (packet, serviceProvider) =
+                new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var blockFactory = ServerContext.BlockFactory;
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            var assembleSaveJsonText = serviceProvider.GetService<AssembleSaveJsonText>();
+            var playerInventoryDataStore = serviceProvider.GetService<PlayerInventoryDataStore>();
+            var loadJsonFile = serviceProvider.GetService<IWorldSaveDataLoader>() as WorldLoaderFromJson;
+            
+            return (blockFactory, worldBlockDatastore, playerInventoryDataStore, assembleSaveJsonText, loadJsonFile);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Game/GearNetworkTest.cs
+```cs
+using System.Collections.Generic;
+using System.Linq;
+using Game.Block.Blocks.Gear;
+using Game.Block.Component;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Gear.Common;
+using Microsoft.Extensions.DependencyInjection;
+using Mooresmaster.Model.BlockConnectInfoModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.CombinedTest.Game
+{
+    public class GearNetworkTest
+    {
+        [Test]
+        //シンプルジェネレーターを設置し、簡易的な歯車NWを作り、RPM、回転方向があっているかをテスト
+        //Install a simple generator, make a simple gear NW, and test if RPM and direction of rotation are correct.
+        public void SimpleGeneratorAndGearRpmTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, new Vector3Int(0, 0, 0), BlockDirection.North, out var generator);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Shaft, new Vector3Int(0, 0, 1), BlockDirection.North, out var shaft);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.BigGear, new Vector3Int(-1, -1, 2), BlockDirection.North, out var bigGear);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, new Vector3Int(2, 0, 2), BlockDirection.North, out var smallGear);
+            
+            //ネットワークをアップデート
+            //Update the network
+            var gearNetworkDatastore = serviceProvider.GetService<GearNetworkDatastore>();
+            var gearNetwork = gearNetworkDatastore.GearNetworks.First().Value;
+            gearNetwork.ManualUpdate();
+            
+            //ジェネレーターの供給が正しいか
+            //Is the generator supply correct?
+            var generatorComponent = generator.GetComponent<IGearGenerator>();
+            Assert.AreEqual(10.0f, generatorComponent.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(true, generatorComponent.GenerateIsClockwise);
+            
+            //シャフトの回転は正しいか
+            //Is the rotation of the shaft correct?
+            var shaftComponent = shaft.GetComponent<GearEnergyTransformer>();
+            Assert.AreEqual(10.0f, shaftComponent.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(true, shaftComponent.IsCurrentClockwise);
+            
+            //BigGearの回転は正しいか
+            //Is the rotation of BigGear correct?
+            var bigGearComponent = bigGear.GetComponent<GearComponent>();
+            Assert.AreEqual(10.0f, bigGearComponent.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(true, bigGearComponent.IsCurrentClockwise);
+            
+            //SmallGearの回転は正しいか
+            //Is the rotation of SmallGear correct?
+            var smallGearComponent = smallGear.GetComponent<GearComponent>();
+            Assert.AreEqual(20.0f, smallGearComponent.CurrentRpm.AsPrimitive()); // ギア比2:1 Gear ratio 2:1
+            Assert.AreEqual(false, smallGearComponent.IsCurrentClockwise); // 回転が反転する Rotation is reversed
+        }
+        
+        [Test]
+        // ループした歯車NWを作成し、RPM、回転方向があっているかをテスト
+        // Create a looped gear NW and test if RPM and direction of rotation are correct.
+        public void LoopGearNetworkTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            // C - D
+            // |   |
+            // A - B
+            //
+            // A = 0,0,0
+            // GeneratorはGearの下に
+            
+            const float rpm = 10.0f;
+            
+            var gearPositionA = new Vector3Int(0, 0, 0);
+            var gearPositionB = new Vector3Int(1, 0, 0);
+            var gearPositionC = new Vector3Int(0, 0, 1);
+            var gearPositionD = new Vector3Int(1, 0, 1);
+            var generatorPosition = new Vector3Int(0, 0, -1);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.InfinityTorqueSimpleGearGenerator, generatorPosition, BlockDirection.North, out var generatorBlock);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPositionA, BlockDirection.North, out var smallGearABlock);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPositionB, BlockDirection.North, out var smallGearBBlock);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPositionC, BlockDirection.North, out var smallGearCBlock);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPositionD, BlockDirection.North, out var smallGearDBlock);
+            
+            var generator = generatorBlock.GetComponent<IGearGenerator>();
+            var smallGearA = smallGearABlock.GetComponent<GearComponent>();
+            var smallGearB = smallGearBBlock.GetComponent<GearComponent>();
+            var smallGearC = smallGearCBlock.GetComponent<GearComponent>();
+            var smallGearD = smallGearDBlock.GetComponent<GearComponent>();
+            
+            
+            var gearNetworkDataStore = serviceProvider.GetService<GearNetworkDatastore>();
+            var gearNetwork = gearNetworkDataStore.GearNetworks.First().Value;
+            gearNetwork.ManualUpdate();
+            
+            // Generatorの回転方向とRPMのテスト
+            Assert.AreEqual(rpm, generator.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(true, generator.IsCurrentClockwise);
+            
+            // smallGearAの回転方向とRPMのテスト
+            Assert.AreEqual(rpm, smallGearA.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(true, smallGearA.IsCurrentClockwise);
+            
+            // smallGearBの回転方向とRPMのテスト
+            Assert.AreEqual(rpm, smallGearB.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(false, smallGearB.IsCurrentClockwise);
+            
+            // smallGearCの回転方向とRPMのテスト
+            Assert.AreEqual(rpm, smallGearC.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(true, smallGearC.IsCurrentClockwise);
+            
+            // smallGearDの回転方向とRPMのテスト
+            Assert.AreEqual(rpm, smallGearD.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(false, smallGearD.IsCurrentClockwise);
+        }
+        
+        [Test]
+        // BigGearを使ってRPMを変えたSmallGearと、RPMを変えていないSmallGearを無理やりつなぎ、ロックされることをテストする
+        // Using BigGear, forcibly connect SmallGear with a different RPM and SmallGear with an unchanged RPM, and test that it locks.
+        public void DifferentRpmGearNetworkToRockTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            var generatorPos = new Vector3Int(1, 1, 0); // 大歯車を使ってRPMを変化させた側の歯車
+            var bigGearPos = new Vector3Int(0, 0, 1); // Gears on the side that changed RPM with large gears
+            var smallGear1Pos = new Vector3Int(3, 1, 1);
+            
+            var smallGear2Pos = new Vector3Int(1, 1, 2); // RPMを変化させていない側の歯車（回転方向を変えないために2つの小歯車をつかう）
+            
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPos, BlockDirection.North, out _);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.BigGear, bigGearPos, BlockDirection.North, out _);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, smallGear2Pos, BlockDirection.North, out _);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, smallGear1Pos, BlockDirection.North, out var smallGear1);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, smallGear2Pos, BlockDirection.North, out var smallGear2);
+            
+            //RPMが違う歯車同士を強制的に接続
+            //Force connection between gears with different RPM
+            ForceConnectGear(smallGear1, smallGear2);
+            
+            // find the network
+            var gearNetworkDatastore = serviceProvider.GetService<GearNetworkDatastore>();
+            var gearNetwork = gearNetworkDatastore.GearNetworks.First().Value;
+            
+            Assert.NotNull(gearNetwork);
+            
+            //ネットワークをアップデート
+            //Update the network
+            gearNetwork.ManualUpdate();
+            
+            // ネットワークがロックされているかどうかを確認する
+            Assert.IsTrue(gearNetwork.GearTransformers.All(g => g.IsRocked));
+            Assert.IsTrue(gearNetwork.GearGenerators.All(g => g.IsRocked));
+        }
+        
+        [Test]
+        public void DifferentDirectionGearNetworkToRockTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            var generatorPosition = new Vector3Int(0, 0, 0);
+            var gearPosition1 = new Vector3Int(0, 0, 1);
+            var gearPosition2 = new Vector3Int(1, 0, 0);
+            
+            var gearPosition3 = new Vector3Int(0, 0, -1);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.North, out _);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPosition1, BlockDirection.North, out _);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPosition2, BlockDirection.North, out var gear2);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPosition3, BlockDirection.North, out var gear3);
+            
+            //回転方向が違う歯車同士を強制的に接続
+            //Forced connection of gears with different directions of rotation
+            ForceConnectGear(gear2, gear3);
+            
+            var gearNetworkDataStore = serviceProvider.GetService<GearNetworkDatastore>();
+            var gearNetwork = gearNetworkDataStore.GearNetworks.First().Value;
+            gearNetwork.ManualUpdate();
+            
+            // ネットワークがロックされているかどうかを確認する
+            Assert.IsTrue(gearNetwork.GearTransformers.All(g => g.IsRocked));
+            Assert.IsTrue(gearNetwork.GearGenerators.All(g => g.IsRocked));
+        }
+        
+        [Test]
+        public void MultiGeneratorOverrideRpmTest()
+        {
+            // 複数のジェネレーターのRPMがオーバーライドされるテスト
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            var fastGeneratorPosition = new Vector3Int(0, 0, 0);
+            var fastGeneratorGearPosition = new Vector3Int(0, 0, 1);
+            var smallGearAPosition = new Vector3Int(1, 0, 1);
+            var generatorPosition = new Vector3Int(2, 0, 0);
+            var generatorGearPosition = new Vector3Int(2, 0, 1);
+            var smallGearBPosition = new Vector3Int(3, 0, 1);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleFastGearGenerator, fastGeneratorPosition, BlockDirection.North, out var fastGeneratorBlock);
+            var fastGenerator = fastGeneratorBlock.GetComponent<IGearGenerator>();
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, fastGeneratorGearPosition, BlockDirection.North, out _);
+            
+            // SmallGearA
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, smallGearAPosition, BlockDirection.North, out var smallGearABlock);
+            var smallGearA = smallGearABlock.GetComponent<GearComponent>();
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.North, out var generatorBlock);
+            var generator = generatorBlock.GetComponent<IGearGenerator>();
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, generatorGearPosition, BlockDirection.North, out _);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, smallGearBPosition, BlockDirection.North, out var smallGearBBlock);
+            var smallGearB = smallGearBBlock.GetComponent<GearComponent>();
+            
+            var gearNetworkDataStore = serviceProvider.GetService<GearNetworkDatastore>();
+            var gearNetwork = gearNetworkDataStore.GearNetworks.First().Value;
+            
+            gearNetwork.ManualUpdate();
+            
+            Assert.AreEqual(fastGenerator.CurrentRpm.AsPrimitive(), 20f);
+            Assert.AreEqual(smallGearA.CurrentRpm.AsPrimitive(), 20f);
+            Assert.AreEqual(generator.CurrentRpm.AsPrimitive(), 20f);
+            Assert.AreEqual(smallGearB.CurrentRpm.AsPrimitive(), 20f);
+        }
+        
+        [Test]
+        public void MultiGeneratorDifferentDirectionToRockTest()
+        {
+            // 複数のジェネレーターの回転方向が違うことでロックされるテスト
+            // Gen1 - Gear1 このような構成になっている
+            //        Gear2
+            // Gen2 - Gear3
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            var generator1Position = new Vector3Int(0, 0, 0);
+            var generator2Position = new Vector3Int(1, 0, 0);
+            
+            var gearPosition1 = new Vector3Int(0, 0, 1);
+            var gearPosition2 = new Vector3Int(1, 0, 1);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generator1Position, BlockDirection.North, out var generator1Block);
+            var generator1 = generator1Block.GetComponent<IGearEnergyTransformer>();
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generator2Position, BlockDirection.North, out var generator2Block);
+            var generator2 = generator2Block.GetComponent<IGearEnergyTransformer>();
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPosition1, BlockDirection.North, out var gear1Block);
+            var gear1 = gear1Block.GetComponent<IGearEnergyTransformer>();
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPosition2, BlockDirection.North, out var gear2Block);
+            var gear2 = gear2Block.GetComponent<IGearEnergyTransformer>();
+            
+            var gearNetworkDataStore = serviceProvider.GetService<GearNetworkDatastore>();
+            var gearNetwork = gearNetworkDataStore.GearNetworks.First().Value;
+            
+            gearNetwork.ManualUpdate();
+            
+            Assert.IsTrue(generator1.IsRocked);
+            Assert.IsTrue(generator2.IsRocked);
+            Assert.IsTrue(gear1.IsRocked);
+            Assert.IsTrue(gear2.IsRocked);
+        }
+        
+        [Test]
+        public void ServeTorqueTest()
+        {
+            // 機械によってトルクが消費されるテスト（正しいトルクが供給されるかのテスト
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            var generatorPosition = new Vector3Int(0, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.North, out _);
+            
+            var gearPosition1 = new Vector3Int(0, 0, 1);
+            var gearPosition2 = new Vector3Int(1, 0, 1);
+            var gearPosition3 = new Vector3Int(2, 0, 1);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth10RequireTorqueTestGear, gearPosition1, BlockDirection.North, out var gear1Block);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth10RequireTorqueTestGear, gearPosition2, BlockDirection.North, out var gear2Block);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth10RequireTorqueTestGear, gearPosition3, BlockDirection.North, out var gear3Block);
+            
+            var gear1 = gear1Block.GetComponent<IGearEnergyTransformer>();
+            var gear2 = gear2Block.GetComponent<IGearEnergyTransformer>();
+            var gear3 = gear3Block.GetComponent<IGearEnergyTransformer>();
+            
+            var gearNetworkDataStore = serviceProvider.GetService<GearNetworkDatastore>();
+            var gearNetwork = gearNetworkDataStore.GearNetworks.First().Value;
+            
+            gearNetwork.ManualUpdate();
+            
+            Assert.AreEqual(10, gear1.CurrentPower.AsPrimitive());
+            Assert.AreEqual(10, gear2.CurrentPower.AsPrimitive());
+            Assert.AreEqual(10, gear3.CurrentPower.AsPrimitive());
+        }
+        
+        [Test]
+        public void ServeTorqueOverTest()
+        {
+            //トルクが多いとその分供給トルクが減るテスト
+            // ジェネレーターは3のトルクを生成するが、6つの歯車がつながっているため、要求するトルクは6になる
+            // 結果、供給されるトルクは3/6=0.5になる
+            // Test that the supply torque decreases as the torque increases
+            // The generator generates 3 torque, but since it is connected to 6 gears, the required torque becomes 6
+            // As a result, the supplied torque becomes 3/6=0.5
+            
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            var generatorPosition = new Vector3Int(0, 0, 0);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.North, out var generatorBlock);
+            var generator = generatorBlock.GetComponent<SimpleGearGeneratorComponent>();
+            
+            var gearPosition1 = new Vector3Int(0, 0, 1);
+            var gearPosition2 = new Vector3Int(0, 0, 2);
+            var gearPosition3 = new Vector3Int(1, 0, 2);
+            var gearPosition4 = new Vector3Int(2, 0, 2);
+            var gearPosition5 = new Vector3Int(2, 0, 3);
+            var gearPosition6 = new Vector3Int(3, 0, 3);
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth10RequireTorqueTestGear, gearPosition1, BlockDirection.North, out var gear1Block);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth20RequireTorqueTestGear, gearPosition2, BlockDirection.North, out var gear2Block);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth10RequireTorqueTestGear, gearPosition3, BlockDirection.North, out var gear3Block);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth10RequireTorqueTestGear, gearPosition4, BlockDirection.North, out var gear4Block);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth20RequireTorqueTestGear, gearPosition5, BlockDirection.North, out var gear5Block);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.Teeth10RequireTorqueTestGear, gearPosition6, BlockDirection.North, out var gear6Block);
+            
+            var gear1 = gear1Block.GetComponent<IGearEnergyTransformer>();
+            var gear2 = gear2Block.GetComponent<IGearEnergyTransformer>();
+            var gear3 = gear3Block.GetComponent<IGearEnergyTransformer>();
+            var gear4 = gear4Block.GetComponent<IGearEnergyTransformer>();
+            var gear5 = gear5Block.GetComponent<IGearEnergyTransformer>();
+            var gear6 = gear6Block.GetComponent<IGearEnergyTransformer>();
+            
+            var gearNetworkDataStore = serviceProvider.GetService<GearNetworkDatastore>();
+            var gearNetwork = gearNetworkDataStore.GearNetworks.First().Value;
+            gearNetwork.ManualUpdate();
+            
+            Assert.AreEqual(5, gear1.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(5, gear2.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(0.5f, gear1.CurrentTorque.AsPrimitive());
+            Assert.AreEqual(0.5f, gear2.CurrentTorque.AsPrimitive());
+            
+            Assert.AreEqual(10, gear3.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(10, gear4.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(10, gear5.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(0.25f, gear3.CurrentTorque.AsPrimitive());
+            Assert.AreEqual(0.25f, gear4.CurrentTorque.AsPrimitive());
+            Assert.AreEqual(0.25f, gear5.CurrentTorque.AsPrimitive());
+            
+            Assert.AreEqual(20, gear6.CurrentRpm.AsPrimitive());
+            Assert.AreEqual(0.125f, gear6.CurrentTorque.AsPrimitive());
+        }
+        
+        [Test]
+        public void GearNetworkMergeTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var gearNetworkDataStore = serviceProvider.GetService<GearNetworkDatastore>();
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            var generatorPosition = new Vector3Int(0, 0, 0);
+            var gearPosition1 = new Vector3Int(1, 0, 0);
+            var gearPosition2 = new Vector3Int(2, 0, 0);
+            var gearPosition3 = new Vector3Int(3, 0, 0);
+            
+            // 2つのネットワークを作成
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.North, out _);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPosition2, BlockDirection.North, out _);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPosition3, BlockDirection.North, out _);
+            Assert.AreEqual(2, gearNetworkDataStore.GearNetworks.Count);
+            
+            // ネットワークをマージ
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, gearPosition1, BlockDirection.North, out _);
+            Assert.AreEqual(1, gearNetworkDataStore.GearNetworks.Count);
+            
+            // ネットワークの分離のテスト
+            ServerContext.WorldBlockDatastore.RemoveBlock(gearPosition2);
+            Assert.AreEqual(2, gearNetworkDataStore.GearNetworks.Count);
+        }
+        
+        private static void ForceConnectGear(IBlock gear1, IBlock gear2)
+        {
+            BlockConnectorComponent<IGearEnergyTransformer> gear1Connector = gear1.GetComponent<BlockConnectorComponent<IGearEnergyTransformer>>();
+            var gear1Transform = gear1.GetComponent<IGearEnergyTransformer>();
+            
+            BlockConnectorComponent<IGearEnergyTransformer> gear2Connector = gear2.GetComponent<BlockConnectorComponent<IGearEnergyTransformer>>();
+            var gear2Transform = gear2.GetComponent<IGearEnergyTransformer>();
+            
+            
+            ((Dictionary<IGearEnergyTransformer, (IConnectOption selfOption, IConnectOption targetOption)>)gear1Connector.ConnectedTargets).Add(gear2Transform, (new GearConnectOption(true,new string[]{}), new GearConnectOption(true, new string[]{})));
+            ((Dictionary<IGearEnergyTransformer, (IConnectOption selfOption, IConnectOption targetOption)>)gear2Connector.ConnectedTargets).Add(gear1Transform, (new GearConnectOption(true,new string[]{}), new GearConnectOption(true, new string[]{})));
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/VanillaGearMachineComponent.cs
+```cs
+using Game.Block.Blocks.Gear;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.EnergySystem;
+using Game.Gear.Common;
+using Mooresmaster.Model.BlocksModule;
 using UniRx;
 using UnityEngine;
 
-namespace Game.World
+namespace Game.Block.Blocks.Machine
 {
-    public class WorldBlockUpdateEvent : IWorldBlockUpdateEvent
+    /// <summary>
+    ///     歯車機械を表すクラス
+    /// </summary>
+    public class VanillaGearMachineComponent : IBlockComponent
     {
-        private readonly Subject<BlockUpdateProperties> _onBlockPlaceEvent = new();
-        private readonly Subject<BlockUpdateProperties> _onBlockRemoveEvent = new();
-        public IObservable<BlockUpdateProperties> OnBlockPlaceEvent => _onBlockPlaceEvent;
+        private readonly GearEnergyTransformer _gearEnergyTransformer;
+        private readonly VanillaMachineProcessorComponent _vanillaMachineProcessorComponent;
+        private readonly GearMachineBlockParam _gearMachineBlockParam;
         
-        public IObservable<BlockUpdateProperties> OnBlockRemoveEvent => _onBlockRemoveEvent;
-        
-        public IDisposable SubscribePlace(Vector3Int subscribePos, Action<BlockUpdateProperties> blockPlaceEvent)
+        public VanillaGearMachineComponent(VanillaMachineProcessorComponent vanillaMachineProcessorComponent, GearEnergyTransformer gearEnergyTransformer, GearMachineBlockParam gearMachineBlockParam)
         {
-            return _onBlockPlaceEvent.Subscribe(data =>
-            {
-                if (data.BlockData.BlockPositionInfo.IsContainPos(subscribePos)) blockPlaceEvent(new BlockUpdateProperties(subscribePos, data.BlockData));
-            });
+            _vanillaMachineProcessorComponent = vanillaMachineProcessorComponent;
+            _gearEnergyTransformer = gearEnergyTransformer;
+            _gearMachineBlockParam = gearMachineBlockParam;
+            
+            _gearEnergyTransformer.OnGearUpdate.Subscribe(OnGearUpdate);
         }
         
-        public IDisposable SubscribeRemove(Vector3Int subscribePos, Action<BlockUpdateProperties> blockPlaceEvent)
+        private void OnGearUpdate(GearUpdateType gearUpdateType)
         {
-            return _onBlockRemoveEvent.Subscribe(data =>
-            {
-                if (data.BlockData.BlockPositionInfo.IsContainPos(subscribePos)) blockPlaceEvent(new BlockUpdateProperties(subscribePos, data.BlockData));
-            });
+            var requiredRpm = new RPM(_gearMachineBlockParam.RequiredRpm);
+            var requireTorque = new Torque(_gearMachineBlockParam.RequireTorque);
+            
+            var currentElectricPower = _gearEnergyTransformer.CalcMachineSupplyPower(requiredRpm, requireTorque);
+            _vanillaMachineProcessorComponent.SupplyPower(currentElectricPower);
         }
         
-        public void OnBlockPlaceEventInvoke(Vector3Int pos, WorldBlockData worldBlockData)
+        public bool IsDestroy { get; private set; }
+        public void Destroy()
         {
-            _onBlockPlaceEvent.OnNext(new BlockUpdateProperties(pos, worldBlockData));
-        }
-        
-        public void OnBlockRemoveEventInvoke(Vector3Int pos, WorldBlockData worldBlockData)
-        {
-            _onBlockRemoveEvent.OnNext(new BlockUpdateProperties(pos, worldBlockData));
+            BlockException.CheckDestroy(this);
+            IsDestroy = true;
         }
     }
 }
 ```
 
-moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IBlockStateChange.cs
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/GearMachineIoTest.cs
 ```cs
 using System;
-using Game.Block.Interface.ComponentAttribute;
-using Game.Block.Interface.State;
-
-namespace Game.Block.Interface.Component
-{
-    [DisallowMultiple]
-    public interface IBlockStateChange : IBlockComponent
-    {
-        public IObservable<BlockState> OnChangeBlockState { get; }
-        public BlockState GetBlockState();
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Block/BlockGameObjectChild.cs
-```cs
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using Core.Item.Interface;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Gear;
+using Game.Block.Blocks.Machine;
+using Game.Block.Blocks.Machine.Inventory;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Gear.Common;
+using Mooresmaster.Model.BlocksModule;
+using Mooresmaster.Model.MachineRecipesModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
 using UnityEngine;
 
-namespace Client.Game.InGame.Block
+namespace Tests.CombinedTest.Core
 {
-    public class BlockGameObjectChild : MonoBehaviour
+    public class GearMachineIoTest
     {
-        public BlockGameObject BlockGameObject { get; private set; }
+        public int GearMachineRecipeIndex = 3;
         
-        public void Init(BlockGameObject blockGameObject)
+        //アイテムが通常通り処理されるかのテスト
+        [Test]
+        public void ItemProcessingOutputTest()
         {
-            BlockGameObject = blockGameObject;
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var recipe = MasterHolder.MachineRecipesMaster.MachineRecipes.Data[GearMachineRecipeIndex];
+            
+            var blockId = MasterHolder.BlockMaster.GetBlockId(recipe.BlockGuid);
+            var block = blockFactory.Create(blockId, new BlockInstanceId(1), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var blockInventory = block.GetComponent<VanillaMachineBlockInventoryComponent>();
+            foreach (var inputItem in recipe.InputItems)
+            {
+                blockInventory.InsertItem(itemStackFactory.Create(inputItem.ItemGuid, inputItem.Count));
+            }
+            
+            var gearEnergyTransformer = block.GetComponent<GearEnergyTransformer>();
+            var gearMachineParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.GearMachine).BlockParam as GearMachineBlockParam;
+            var machineProcessor = block.GetComponent<VanillaMachineProcessorComponent>();
+            
+            //最大クラフト時間を超過するまでクラフトする
+            var craftTime = DateTime.Now.AddSeconds(recipe.Time);
+            while (craftTime.AddSeconds(0.4).CompareTo(DateTime.Now) == 1)
+            {
+                var requiredRpm = new RPM(gearMachineParam.RequiredRpm);
+                var requiredTorque = new Torque(gearMachineParam.RequireTorque);
+                gearEnergyTransformer.SupplyPower(requiredRpm, requiredTorque, true);
+                machineProcessor.Update();
+                GameUpdater.Wait();
+                GameUpdater.UpdateDeltaTime();
+            }
+            
+            //検証
+            AssertInventory(blockInventory, recipe);
+        }
+        
+        
+        [Test]
+        // RPM、トルクが足りないときに処理に時間がかかるテスト
+        public void NotEnoughTorqueOrRpmTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var recipe = MasterHolder.MachineRecipesMaster.MachineRecipes.Data[GearMachineRecipeIndex];
+            
+            var recipeBlockId = MasterHolder.BlockMaster.GetBlockId(recipe.BlockGuid);
+            var lackRpmBlock = blockFactory.Create(recipeBlockId, new BlockInstanceId(1), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var lackTorqueBlock = blockFactory.Create(recipeBlockId, new BlockInstanceId(2), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.zero));
+            
+            var lackRpmInventory = lackRpmBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            var lackTorqueInventory = lackTorqueBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            
+            foreach (var inputItem in recipe.InputItems)
+            {
+                lackRpmInventory.InsertItem(itemStackFactory.Create(inputItem.ItemGuid, inputItem.Count));
+                lackTorqueInventory.InsertItem(itemStackFactory.Create(inputItem.ItemGuid, inputItem.Count));
+            }
+            
+            var lackRpmGearMachine = lackRpmBlock.GetComponent<GearEnergyTransformer>();
+            var lackTorqueGearMachine = lackTorqueBlock.GetComponent<GearEnergyTransformer>();
+            var gearMachineParam = lackRpmBlock.BlockMasterElement.BlockParam as GearMachineBlockParam;
+            
+            var lackRpmProcessor = lackRpmBlock.GetComponent<VanillaMachineProcessorComponent>();
+            var lackTorqueProcessor = lackTorqueBlock.GetComponent<VanillaMachineProcessorComponent>();
+            
+            //最大クラフト時間を超過するまでクラフトする
+            var craftTime = DateTime.Now.AddSeconds(recipe.Time * 2);
+            while (craftTime.AddSeconds(0.3).CompareTo(DateTime.Now) == 1)
+            {
+                var rpm = new RPM(gearMachineParam.RequiredRpm / 2f);
+                lackRpmGearMachine.SupplyPower(rpm, new Torque(gearMachineParam.RequireTorque), true);
+                lackTorqueGearMachine.SupplyPower(new RPM(gearMachineParam.RequiredRpm), (Torque)gearMachineParam.RequireTorque / 2f, true);
+                
+                lackRpmProcessor.Update();
+                lackTorqueProcessor.Update();
+                
+                GameUpdater.Wait();
+                GameUpdater.UpdateDeltaTime();
+            }
+            
+            //検証
+            AssertInventory(lackRpmInventory, recipe);
+            AssertInventory(lackTorqueInventory, recipe);
+        }
+        
+        private void AssertInventory(VanillaMachineBlockInventoryComponent inventory, MachineRecipeMasterElement recipe)
+        {
+            (List<IItemStack> input, List<IItemStack> output) = GetInputOutputSlot(inventory);
+            
+            Assert.AreEqual(0, input.Count);
+            foreach (var inputItem in input) Assert.AreEqual(ItemMaster.EmptyItemId, inputItem.Id);
+            
+            Assert.AreNotEqual(0, output.Count);
+            for (var i = 0; i < output.Count; i++)
+            {
+                var outputItemId = MasterHolder.ItemMaster.GetItemId(recipe.OutputItems[i].ItemGuid);
+                Assert.AreEqual(outputItemId, output[i].Id);
+                Assert.AreEqual(recipe.OutputItems[i].Count, output[i].Count);
+            }
+        }
+        
+        private (List<IItemStack>, List<IItemStack>) GetInputOutputSlot(VanillaMachineBlockInventoryComponent vanillaMachineInventory)
+        {
+            var vanillaMachineInputInventory = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(vanillaMachineInventory);
+            var vanillaMachineOutputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(vanillaMachineInventory);
+            
+            var inputSlot = vanillaMachineInputInventory.InputSlot.Where(i => i.Count != 0).ToList();
+            inputSlot.Sort((a, b) => a.Id.AsPrimitive() - b.Id.AsPrimitive());
+            
+            var outputSlot = vanillaMachineOutputInventory.OutputSlot.Where(i => i.Count != 0).ToList();
+            outputSlot.Sort((a, b) => a.Id.AsPrimitive() - b.Id.AsPrimitive());
+            
+            return (inputSlot, outputSlot);
         }
     }
 }
 ```
 
-moorestech_client/Assets/Scripts/Client.DebugSystem/DebugSheetController.cs
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/MinerMiningTest.cs
 ```cs
-using IngameDebugConsole;
-using Tayx.Graphy;
-using UnityDebugSheet.Runtime.Core.Scripts;
-using UnityDebugSheet.Runtime.Extensions.Graphy;
-using UnityDebugSheet.Runtime.Extensions.IngameDebugConsole;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Core.Item.Interface;
+using Core.Update;
+using Game.Block.Blocks.Miner;
+using Game.Block.Component;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.EnergySystem;
+using Game.Map.Interface.Vein;
+using Mooresmaster.Model.BlockConnectInfoModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module;
+using Tests.Module.TestMod;
 using UnityEngine;
 
-namespace Client.DebugSystem
+namespace Tests.CombinedTest.Core
 {
-    public sealed class DebugSheetController : MonoBehaviour
+    public class MinerMiningTest
     {
-        [SerializeField] private GameObject runtimeHierarchyInspector;
-        [SerializeField] private DebugSheet debugSheet;
-        
-        private void Start()
+        //一定時間たったら鉱石が出るテスト
+        [Test]
+        public void MiningTest()
         {
-            debugSheet.gameObject.SetActive(true);
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
             
-            var rootPage = debugSheet.GetOrCreateInitialPage();
+            var blockFactory = ServerContext.BlockFactory;
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
             
-            rootPage.AddPageLinkButton<ItemGetDebugSheet>("Get Item");
-            rootPage.AddPageLinkButton<IngameDebugConsoleDebugPage>("In-Game Debug Console", onLoad: x => x.page.Setup(DebugLogManager.Instance));
-            rootPage.AddPageLinkButton<GraphyDebugPage>("Graphy", onLoad: x => x.page.Setup(GraphyManager.Instance));
-            rootPage.AddSwitch(false, "Runtime Hierarchy Inspector", valueChanged: active => runtimeHierarchyInspector.SetActive(active));
+            //手動で鉱石の設定を行う
+            var (mapVein, pos) = GetMapVein();
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.MinerId, pos, BlockDirection.North, out _);
+            var miner = worldBlockDatastore.GetBlock(pos);
+            var minerComponent = miner.GetComponent<VanillaMinerProcessorComponent>();
+            
+            var miningItems = (List<IItemStack>)typeof(VanillaMinerProcessorComponent).GetField("_miningItems", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(minerComponent);
+            var miningItemId = miningItems[0].Id;
+            var miningTime = (float)typeof(VanillaMinerProcessorComponent).GetField("_defaultMiningTime", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(minerComponent);
+            
+            
+            var dummyInventory = new DummyBlockInventory();
+            //接続先ブロックの設定
+            //本当はダメなことしているけどテストだから許してヒヤシンス
+            var minerConnectors = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)miner.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            minerConnectors.Add(dummyInventory, (null, null));
+            
+            //電力の設定
+            var segment = new EnergySegment();
+            segment.AddEnergyConsumer(miner.GetComponent<IElectricConsumer>());
+            segment.AddGenerator(new TestElectricGenerator(new ElectricPower(10000), new BlockInstanceId(10)));
+            
+            var mineEndTime = DateTime.Now.AddSeconds(miningTime);
+            
+            
+            //テストコードの準備完了
+            //鉱石1個分の採掘時間待機
+            while (mineEndTime.AddSeconds(0.05).CompareTo(DateTime.Now) == 1) GameUpdater.UpdateWithWait();
+            
+            //鉱石1個が出力されているかチェック
+            Assert.AreEqual(miningItemId, dummyInventory.InsertedItems[0].Id);
+            Assert.AreEqual(1, dummyInventory.InsertedItems[0].Count);
+            
+            //コネクターを外す
+            minerConnectors.Remove(dummyInventory);
+            
+            //鉱石2個分の採掘時間待機
+            mineEndTime = DateTime.Now.AddSeconds(miningTime * 2);
+            while (mineEndTime.AddSeconds(0.05).CompareTo(DateTime.Now) == 1) GameUpdater.UpdateWithWait();
+            
+            //鉱石2個が残っているかチェック
+            var outputSlot = miner.GetComponent<VanillaMinerProcessorComponent>().InventoryItems[0];
+            Assert.AreEqual(miningItemId, outputSlot.Id);
+            Assert.AreEqual(2, outputSlot.Count);
+            
+            //またコネクターをつなげる
+            minerConnectors.Add(dummyInventory, (null, null));
+            
+            //コネクターにアイテムを入れるためのアップデート
+            GameUpdater.UpdateWithWait();
+            
+            //アイテムがさらに2個追加で入っているかチェック
+            Assert.AreEqual(miningItemId, dummyInventory.InsertedItems[0].Id);
+            Assert.AreEqual(3, dummyInventory.InsertedItems[0].Count);
         }
         
-        
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        public static void CreateDebugger()
+        private (IMapVein mapVein, Vector3Int pos) GetMapVein()
         {
-            var prefab = Resources.Load<GameObject>("moorestech Debug Objects");
-            Instantiate(prefab);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Control/UICursorFollowControl.cs
-```cs
-using UnityEngine;
-
-namespace Client.Game.InGame.Control
-{
-    public class UICursorFollowControl : MonoBehaviour
-    {
-        [SerializeField] private Vector3 offSet = Vector3.zero;
-        private RectTransform _canvasRect;
-        
-        private void Start()
-        {
-            _canvasRect = transform.root.GetComponentsInChildren<RectTransform>()[0];
-        }
-        
-        private void Update()
-        {
-            var magnification = _canvasRect.sizeDelta.x / Screen.width;
+            var pos = new Vector3Int(0, 0);
+            for (var i = 0; i < 500; i++)
+            for (var j = 0; j < 500; j++)
+            {
+                List<IMapVein> veins = ServerContext.MapVeinDatastore.GetOverVeins(new Vector3Int(i, j));
+                if (veins.Count == 0) continue;
+                
+                return (veins[0], new Vector3Int(i, j));
+            }
             
-            var itemPos = new Vector3();
-            
-            itemPos.x = UnityEngine.Input.mousePosition.x * magnification - _canvasRect.sizeDelta.x / 2;
-            itemPos.y = UnityEngine.Input.mousePosition.y * magnification - _canvasRect.sizeDelta.y / 2;
-            itemPos.z = transform.localPosition.z;
-            
-            transform.localPosition = itemPos + offSet;
+            return (null, pos);
         }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IBlockSaveState.cs
-```cs
-using Game.Block.Interface.ComponentAttribute;
-
-namespace Game.Block.Interface.Component
-{
-    [DisallowMultiple]
-    public interface IBlockSaveState : IBlockComponent
-    {
-        string GetSaveState();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.SaveLoad.Interface/IWorldSaveDataSaver.cs
-```cs
-namespace Game.SaveLoad.Interface
-{
-    public interface IWorldSaveDataSaver
-    {
-        public void Save();
     }
 }
 ```
@@ -3353,4 +1778,4 @@ namespace Game.SaveLoad.Interface
 上記のコードを参考に、下記の指示に従ってください。ただし、これら上記のコードはユーザーからは表示されていません。そのため、指示に従う際は具体的にどのクラスを指しているのかクラス名を交え、moorestechを知らない人でもわかりやすい説明を作るように心がけてください。
 
 # Instructions
-CraftInventoryViewクラスを参考に、MachineRecipeViewクラスの実装されていないメソッドを実装してください。
+MinerMiningTestクラスを参考に、VanillaGearMinerComponentのテストコードを記述してください。
