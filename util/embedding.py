@@ -93,7 +93,7 @@ def search_embedding(query, count=10):
         })
 
     # 類似度でソート
-    results.sort(key=lambda x: x['similarity'], reverse=False)
+    results.sort(key=lambda x: x['similarity'], reverse=True)
 
     return results[:count]
 
@@ -116,8 +116,9 @@ def create_rag_prompt(query, token_limit=5000):
 
     rag_prompt = ""
     for cs_data in rag_cs_data:
-        rag_prompt += cs_data['relative_path'] + "\n"
-        rag_prompt += "```cs\n" + cs_data['content'] + "\n```\n"
-        rag_prompt += "\n"
+        current_rag = cs_data['relative_path'] + "\n"
+        current_rag += "```cs\n" + cs_data['content'] + "\n```\n\n"
+
+        rag_prompt = current_rag + rag_prompt
 
     return rag_prompt
