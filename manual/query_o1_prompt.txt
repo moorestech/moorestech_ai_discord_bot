@@ -1,17 +1,54 @@
-ブロックを破壊したとき、以下のようなエラーが発生しました。
-このエラーの原因と対処法を教えてください。
+ # ロジパイプ仕様
 
-```cs
-InvalidOperationException: This component is already destroyed
-Game.Block.Interface.BlockException.CheckDestroy (Game.Block.Interface.Component.IBlockComponent blockComponent) (at Assets/Scripts/Game.Block.Interface/BlockException.cs:15)
-Game.Block.Blocks.Miner.VanillaMinerProcessorComponent.Update () (at Assets/Scripts/Game.Block/Blocks/Miner/VanillaMinerProcessorComponent.cs:120)
-Game.Block.Blocks.BlockSystem.Update () (at Assets/Scripts/Game.Block/Blocks/BlockSystem.cs:67)
-Game.Block.Blocks.BlockSystem.<.ctor>b__23_1 (UniRx.Unit _) (at Assets/Scripts/Game.Block/Blocks/BlockSystem.cs:50)
-UniRx.Observer+Subscribe`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/Observer.cs:165)
-UniRx.InternalUtil.ListObserver`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/InternalUtil/ListObserver.cs:39)
-UniRx.Subject`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/Subjects/Subject.cs:62)
-Core.Update.GameUpdater.Update () (at Assets/Scripts/Core.Update/GameUpdater.cs:20)
-ServerStarter.FixedUpdate () (at Assets/ServerStarter.cs:20)
-```
+# 概要
 
-関連クラス: GameUpdater
+MinecraftのLogicstcs pipeというmodをベースにしたオンデマンドクラフトシステム
+
+アイテムが注文されたときに、ロジスティクスパイプネットワークに登録されている機械を使用して中間素材を含むアイテムを次々と作成し、必要なアイテムを必要な量、必要なときにお届けするシステムである。
+
+このシステムは「ロジパイプネットワーク」を構築することで作成、稼働させることができる。
+
+ロジパイプネットワークはロジパイプを構築している一つの機械ネットワークである。このネットワークはノードが機械となり、そのリンクがアイテム輸送路となる。機械同士がアイテム輸送路でつながり、必要なアイテムを必要なだけ生産し、適切な機械に届けて加工を行うという役割を果たす。
+
+# ロジパイプネットワークの基本要素
+
+- ロジパイプコンピューター
+- ストレージ
+- 加工機械
+- ロジパイプ専用アイテム輸送路
+
+## ロジパイプコンピューター
+
+ロジパイプネットワークの中でアイテムの受注を請負い、現在のストレージに入っているアイテム量で足りるか、足りない素材はなにか、加工機械は足りているか、を判断し、どのアイテムをどの機械に輸送、加工すればいいかを判断する。
+
+また、完成したアイテムを受け取る場所にもなる。
+
+## ストレージ
+
+ロジパイプネットワークの中でアイテムの保存を行う。原材料の供給や、余った中間素材などを保存しておく。
+
+## 加工機械
+
+ロジパイプネットワークの中で、アイテムの加工を担当する。格納されたアイテムを下に、別のアイテムに加工して輸送路に流す。
+
+## ロジパイプ専用アイテム輸送路
+
+ロジスティクス・ネットワークを構築するためのアイテムの輸送路。輸送路内でアイテム同士が重なったり、並行交差はせず、一方通行となっている。そのため、最低限、センターコンソールを起点に上り輸送路と下り輸送路を用意し、それぞれのアイテム輸送路を繋ぐ必要がある。
+
+# 命令
+
+上記のロジパイプシステムを実現するために、 CraftChainTreeNode GetEnableCraftChainTree(CraftChainItem targetItem) を実装したいと思っています。
+
+
+ このメソッドはクラフトチェインのツリーを参考に、作れるクラフトチェインのツリーを探索し、返すメソッドです。
+
+ 探索の方法、条件は以下のとおりです。
+ - すべてのツリーの最下部まで探索し、必要なアイテムの種類と数を洗い出す。
+ - その過程で、中間素材があるのであれば、その中間素材を使うため、中間素材を作成するための原材料は不要である。
+ - 例えば A-1 <- B-1,C-2 と B-1 <- C-2 というレシピがあったときに、Aを1個作るためにはBが1個、Cが2個必要であり、Bを1個作るためにはCが2個必要となる。
+   - このとき、もし既にBが1個存在すれば、Aを作るための要求量はBが1個、Cが2個となる。
+   - もしBが存在しない場合、Aを作るためにはCが4個必要となる。
+ - もしD-1 <- E-8, E-4 <- F-2, E-4 <- G-2 というレシピの場合、Fが4個、Gが4個、Fが2個とGが2個あるときに作成が可能となる。
+
+これらの条件を満たすように、クラフトチェインツリーのチェックを実装したいです。
+ただし、そのアイテムが有るかどうかといった実装は今行う必要はありません。細かい実装物は後回しにして、まずはこのロジックを実現できるアルゴリズムを考え、そのアルゴリズムを落とし込んだコードを記述してください。

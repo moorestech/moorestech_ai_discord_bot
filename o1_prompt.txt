@@ -1,219 +1,3 @@
-moorestech_client/Assets/Scripts/Client.Game/InGame/BlockSystem/StateProcessor/MachineBlockStateChangeProcessor.cs
-```cs
-using System;
-using Game.Block.Blocks.Machine;
-using Game.Block.Interface.State;
-using MessagePack;
-using UnityEngine;
-
-namespace Client.Game.InGame.BlockSystem.StateProcessor
-{
-    public class MachineBlockStateChangeProcessor : MonoBehaviour, IBlockStateChangeProcessor
-    {
-        private AudioSource _audioSource;
-        private ParticleSystem _machineEffect;
-        private float _processingRate;
-        
-        private void Awake()
-        {
-            _machineSoundClip ??= Resources.Load<AudioClip>("Machine/MachineProcess");
-            _machineEffectPrefab ??= Resources.Load<GameObject>("Machine/MachineProcessEffect");
-        }
-        
-        private void Start()
-        {
-            _audioSource = gameObject.AddComponent<AudioSource>();
-            _audioSource.clip = _machineSoundClip;
-            _audioSource.Stop();
-            
-            var effectObject = Instantiate(_machineEffectPrefab, transform);
-            effectObject.transform.localPosition = Vector3.zero;
-            _machineEffect = effectObject.GetComponent<ParticleSystem>();
-            _machineEffect.Stop();
-        }
-        
-        
-        public void OnChangeState(string currentState, string previousState, byte[] currentStateData)
-        {
-            var data = MessagePackSerializer.Deserialize<CommonMachineBlockStateChangeData>(currentStateData);
-            _processingRate = data.processingRate;
-            switch (currentState)
-            {
-                case VanillaMachineBlockStateConst.ProcessingState:
-                    if (previousState == VanillaMachineBlockStateConst.IdleState)
-                    {
-                        _machineEffect.Play();
-                        _audioSource.Play();
-                    }
-                    
-                    break;
-                case VanillaMachineBlockStateConst.IdleState:
-                    _audioSource.Stop();
-                    _machineEffect.Stop();
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(currentState), currentState, null);
-            }
-        }
-        
-        #region Resources
-        
-        private static AudioClip _machineSoundClip;
-        private static GameObject _machineEffectPrefab;
-        
-        #endregion
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/BlockSystem/StateProcessor/NullBlockStateChangeProcessor.cs
-```cs
-namespace Client.Game.InGame.BlockSystem.StateProcessor
-{
-    /// <summary>
-    ///     無機能のブロックに使うステートプロセッサー
-    /// </summary>
-    public class NullBlockStateChangeProcessor : IBlockStateChangeProcessor
-    {
-        public void OnChangeState(string currentState, string previousState, byte[] currentStateData)
-        {
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/ElectricPole/VanillaElectricPoleComponent.cs
-```cs
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.EnergySystem;
-
-namespace Game.Block.Blocks.ElectricPole
-{
-    public class VanillaElectricPoleComponent : IElectricTransformer, IBlockComponent
-    {
-        public VanillaElectricPoleComponent(BlockInstanceId blockInstanceId)
-        {
-            BlockInstanceId = blockInstanceId;
-        }
-        
-        public BlockInstanceId BlockInstanceId { get; }
-        public bool IsDestroy { get; private set; }
-        
-        public void Destroy()
-        {
-            IsDestroy = true;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IBlockStateChange.cs
-```cs
-using System;
-using Game.Block.Interface.ComponentAttribute;
-using Game.Block.Interface.State;
-
-namespace Game.Block.Interface.Component
-{
-    [DisallowMultiple]
-    public interface IBlockStateChange : IBlockComponent
-    {
-        public IObservable<BlockState> OnChangeBlockState { get; }
-        public BlockState GetBlockState();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.EnergySystem/IElectricTransformer.cs
-```cs
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-
-namespace Game.EnergySystem
-{
-    /// <summary>
-    ///     エネルギーを伝達するモノ
-    /// </summary>
-    public interface IElectricTransformer : IBlockComponent
-    {
-        public BlockInstanceId BlockInstanceId { get; }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.EventHandler/EnergyEvent/DisconnectElectricPoleToFromElectricSegment.cs
-```cs
-using Game.Context;
-using Game.EnergySystem;
-using Game.World.EventHandler.EnergyEvent.EnergyService;
-using Game.World.Interface.DataStore;
-using Mooresmaster.Model.BlocksModule;
-using UniRx;
-
-namespace Game.World.EventHandler.EnergyEvent
-{
-    /// <summary>
-    ///     電柱などのエネルギー伝達ブロックが破壊されたときに、セグメントを新しく作成するか、既存のセグメントから切り離すかを判断し、実行するクラス
-    /// </summary>
-    public class DisconnectElectricPoleToFromElectricSegment<TSegment, TConsumer, TGenerator, TTransformer>
-        where TSegment : EnergySegment, new()
-        where TConsumer : IElectricConsumer
-        where TGenerator : IElectricGenerator
-        where TTransformer : IElectricTransformer
-    {
-        private readonly EnergyServiceDependencyContainer<TSegment> _dependencyContainer;
-        private readonly IWorldEnergySegmentDatastore<TSegment> _worldEnergySegmentDatastore;
-        
-        
-        public DisconnectElectricPoleToFromElectricSegment(IWorldEnergySegmentDatastore<TSegment> worldEnergySegmentDatastore)
-        {
-            _worldEnergySegmentDatastore = worldEnergySegmentDatastore;
-            
-            _dependencyContainer = new EnergyServiceDependencyContainer<TSegment>(worldEnergySegmentDatastore);
-            ServerContext.WorldBlockUpdateEvent.OnBlockRemoveEvent.Subscribe(OnBlockRemove);
-        }
-        
-        private void OnBlockRemove(BlockUpdateProperties updateProperties)
-        {
-            var pos = updateProperties.Pos;
-            
-            //電柱かどうか判定
-            //電柱だったら接続範囲内周りにある電柱を取得する
-            if (!ServerContext.WorldBlockDatastore.TryGetBlock<TTransformer>(pos, out var removedElectricPole)) return;
-            
-            
-            //接続範囲内の電柱を取得
-            var electricPoleConfigParam = updateProperties.BlockData.Block.BlockMasterElement.BlockParam as ElectricPoleBlockParam;
-            var electricPoles = FindElectricPoleFromPeripheralService.Find(pos, electricPoleConfigParam);
-            
-            //削除した電柱のセグメントを取得
-            var removedSegment = _worldEnergySegmentDatastore.GetEnergySegment(removedElectricPole);
-            
-            
-            switch (electricPoles.Count)
-            {
-                //周りに電柱がないとき
-                case 0:
-                    //セグメントを削除する
-                    _worldEnergySegmentDatastore.RemoveEnergySegment(removedSegment);
-                    return;
-                //周りの電柱が1つの時
-                case 1:
-                    DisconnectOneElectricPoleFromSegmentService<TSegment, TConsumer, TGenerator, TTransformer>
-                        .Disconnect(removedElectricPole, _dependencyContainer);
-                    return;
-                //周りの電柱が2つ以上の時
-                case >= 2:
-                    DisconnectTwoOrMoreElectricPoleFromSegmentService<TSegment, TConsumer, TGenerator, TTransformer>
-                        .Disconnect(removedElectricPole, _dependencyContainer);
-                    break;
-            }
-        }
-    }
-}
-```
-
 moorestech_server/Assets/Scripts/Tests/UnitTest/Game/SaveLoad/MachineSaveLoadTest.cs
 ```cs
 using System.Reflection;
@@ -344,414 +128,621 @@ namespace Tests.UnitTest.Game.SaveLoad
 }
 ```
 
-moorestech_server/Assets/Scripts/Server.Event/EventReceive/ChangeBlockStateEventPacket.cs
-```cs
-using System;
-using Game.Block.Interface.State;
-using Game.Context;
-using Game.World.Interface.DataStore;
-using MessagePack;
-using Server.Util.MessagePack;
-using UniRx;
-using UnityEngine;
-
-namespace Server.Event.EventReceive
-{
-    public class ChangeBlockStateEventPacket
-    {
-        public const string EventTag = "va:event:changeBlockState";
-        
-        private readonly EventProtocolProvider _eventProtocolProvider;
-        
-        public ChangeBlockStateEventPacket(EventProtocolProvider eventProtocolProvider)
-        {
-            _eventProtocolProvider = eventProtocolProvider;
-            ServerContext.WorldBlockDatastore.OnBlockStateChange.Subscribe(ChangeState);
-        }
-        
-        private void ChangeState((BlockState state, WorldBlockData blockData) state)
-        {
-            var messagePack = new ChangeBlockStateMessagePack(state.state, state.blockData.BlockPositionInfo.OriginalPos);
-            var payload = MessagePackSerializer.Serialize(messagePack);
-            
-            _eventProtocolProvider.AddBroadcastEvent(EventTag, payload);
-        }
-    }
-    
-    [MessagePackObject]
-    public class ChangeBlockStateMessagePack
-    {
-        [Obsolete("デシリアライズ用のコンストラクタです。基本的に使用しないでください。")]
-        public ChangeBlockStateMessagePack()
-        {
-        }
-        
-        public ChangeBlockStateMessagePack(BlockState state, Vector3Int pos)
-        {
-            CurrentState = state.CurrentState;
-            PreviousState = state.PreviousState;
-            
-            CurrentStateData = state.CurrentStateData;
-            Position = new Vector3IntMessagePack(pos);
-        }
-        
-        [Key(0)] public string CurrentState { get; set; }
-        
-        [Key(1)] public string PreviousState { get; set; }
-        
-        [Key(2)] public byte[] CurrentStateData { get; set; }
-        
-        [Key(3)] public Vector3IntMessagePack Position { get; set; }
-        
-        public TBlockState GetStateData<TBlockState>()
-        {
-            return MessagePackSerializer.Deserialize<TBlockState>(CurrentStateData);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/CombinedTest/Server/PacketTest/Event/BlockRemoveEventPacketTest.cs
+moorestech_server/Assets/Scripts/Tests/UnitTest/Core/Other/ConnectingInventoryListPriorityInsertItemServiceTest.cs
 ```cs
 using System.Collections.Generic;
-using System.Linq;
 using Core.Master;
+using Game.Block.Blocks.Service;
+using Game.Block.Component;
 using Game.Block.Interface;
+using Game.Block.Interface.Component;
 using Game.Context;
-using Game.World.Interface.DataStore;
-using MessagePack;
+using Mooresmaster.Model.BlockConnectInfoModule;
 using NUnit.Framework;
 using Server.Boot;
-using Server.Event.EventReceive;
-using Server.Protocol.PacketResponse;
+using Tests.Module;
 using Tests.Module.TestMod;
 using UnityEngine;
 
-namespace Tests.CombinedTest.Server.PacketTest.Event
+namespace Tests.UnitTest.Core.Other
 {
-    /// <summary>
-    ///     ブロックを消したらその情報がイベントで飛んでくるテスト
-    /// </summary>
-    public class BlockRemoveEventPacketTest
+    public class ConnectingInventoryListPriorityInsertItemServiceTest
     {
+        /// <summary>
+        ///     アイテムを挿入の優先度がループしてるかテストする
+        /// </summary>
         [Test]
-        public void RemoveBlockEvent()
+        public void Test()
         {
-            var (packetResponse, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            //イベントキューにIDを登録する
-            List<List<byte>> response = packetResponse.GetPacketResponse(EventRequestData(0));
-            var eventMessagePack = MessagePackSerializer.Deserialize<ResponseEventProtocolMessagePack>(response[0].ToArray());
-            Assert.AreEqual(0, eventMessagePack.Events.Count);
-            var worldBlock = ServerContext.WorldBlockDatastore;
-            var blockFactory = ServerContext.BlockFactory;
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var itemStackFactory = ServerContext.ItemStackFactory;
             
-            //ブロックを設置
-            BlockPlace(4, 0, 1, worldBlock, blockFactory);
-            BlockPlace(3, 1, 2, worldBlock, blockFactory);
-            BlockPlace(2, 3, 3, worldBlock, blockFactory);
-            BlockPlace(1, 4, 4, worldBlock, blockFactory);
+            var inventoryList = new List<IBlockInventory>();
             
-            //イベントを取得
-            response = packetResponse.GetPacketResponse(EventRequestData(0));
-            eventMessagePack = MessagePackSerializer.Deserialize<ResponseEventProtocolMessagePack>(response[0].ToArray());
-            Assert.AreEqual(4, eventMessagePack.Events.Count);
+            //インベントリ1はインベントリのサイズを1にして、インベントリ2に入るか確認する
+            var inventory1 = new DummyBlockInventory(1, 1);
+            var inventory2 = new DummyBlockInventory();
+            var inventory3 = new DummyBlockInventory();
+            inventoryList.Add(inventory1);
+            inventoryList.Add(inventory2);
+            inventoryList.Add(inventory3);
             
-            var worldDataStore = ServerContext.WorldBlockDatastore;
-            //一個ブロックを削除
-            worldDataStore.RemoveBlock(new Vector3Int(4, 0));
+            var componentPos = new BlockPositionInfo(Vector3Int.zero, BlockDirection.North, Vector3Int.one);
+            var inputConnectorComponent = new BlockConnectorComponent<IBlockInventory>(null, null, componentPos);
             
-            //イベントを取得
-            response = packetResponse.GetPacketResponse(EventRequestData(0));
-            eventMessagePack = MessagePackSerializer.Deserialize<ResponseEventProtocolMessagePack>(response[0].ToArray());
+            var targets = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)inputConnectorComponent.ConnectedTargets;
             
-            Assert.AreEqual(1, eventMessagePack.Events.Count);
-            var pos = AnalysisResponsePacket(eventMessagePack.Events[0].Payload);
-            Assert.AreEqual(4, pos.x);
-            Assert.AreEqual(0, pos.y);
+            foreach (var inventory in inventoryList) targets.Add(inventory, (null, null));
             
-            //二個ブロックを削除
-            worldDataStore.RemoveBlock(new Vector3Int(3, 1));
-            worldDataStore.RemoveBlock(new Vector3Int(1, 4));
-            //イベントを取得
-            response = packetResponse.GetPacketResponse(EventRequestData(0));
-            eventMessagePack = MessagePackSerializer.Deserialize<ResponseEventProtocolMessagePack>(response[0].ToArray());
-            Assert.AreEqual(2, eventMessagePack.Events.Count);
-            pos = AnalysisResponsePacket(eventMessagePack.Events[0].Payload);
-            Assert.AreEqual(3, pos.x);
-            Assert.AreEqual(1, pos.y);
-            pos = AnalysisResponsePacket(eventMessagePack.Events[1].Payload);
-            Assert.AreEqual(1, pos.x);
-            Assert.AreEqual(4, pos.y);
-        }
-        
-        private void BlockPlace(int x, int y, int id, IWorldBlockDatastore worldBlockDatastore, IBlockFactory blockFactory)
-        {
-            worldBlockDatastore.TryAddBlock((BlockId)id, new Vector3Int(x, y), BlockDirection.North, out _);
-        }
-        
-        private List<byte> EventRequestData(int playerID)
-        {
-            return MessagePackSerializer.Serialize(new EventProtocolMessagePack(playerID)).ToList();
-        }
-        
-        private Vector3Int AnalysisResponsePacket(byte[] payload)
-        {
-            var data = MessagePackSerializer.Deserialize<RemoveBlockEventMessagePack>(payload.ToArray());
+            var service = new ConnectingInventoryListPriorityInsertItemService(inputConnectorComponent);
             
-            return data.Position;
+            service.InsertItem(itemStackFactory.Create(new ItemId(1), 4));
+            service.InsertItem(itemStackFactory.Create(new ItemId(2), 3));
+            service.InsertItem(itemStackFactory.Create(new ItemId(3), 2));
+            service.InsertItem(itemStackFactory.Create(new ItemId(4), 1));
+            
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(1), 4), inventory1.InsertedItems[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(2), 3), inventory2.InsertedItems[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(3), 2), inventory3.InsertedItems[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(4), 1), inventory2.InsertedItems[1]);
         }
     }
 }
 ```
 
-moorestech_server/Assets/Scripts/Server.Event/EventReceive/PlaceBlockEventPacket.cs
+moorestech_server/Assets/Scripts/Tests/UnitTest/Game/SaveLoad/GearMachineSaveLoadTest.cs
 ```cs
-using System;
+using System.Reflection;
 using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Gear;
+using Game.Block.Blocks.Machine;
+using Game.Block.Blocks.Machine.Inventory;
 using Game.Block.Interface;
-using Game.Context;
-using Game.World.Interface.DataStore;
-using MessagePack;
-using Server.Util.MessagePack;
-using UniRx;
-using UnityEngine;
-
-namespace Server.Event.EventReceive
-{
-    public class PlaceBlockEventPacket
-    {
-        public const string EventTag = "va:event:blockPlace";
-        private readonly EventProtocolProvider _eventProtocolProvider;
-        
-        public PlaceBlockEventPacket(EventProtocolProvider eventProtocolProvider)
-        {
-            _eventProtocolProvider = eventProtocolProvider;
-            ServerContext.WorldBlockUpdateEvent.OnBlockPlaceEvent.Subscribe(OnPlaceBlock);
-        }
-        
-        private void OnPlaceBlock(BlockUpdateProperties updateProperties)
-        {
-            var pos = updateProperties.Pos;
-            var direction = updateProperties.BlockData.BlockPositionInfo.BlockDirection;
-            var blockId = updateProperties.BlockData.Block.BlockId;
-            
-            var messagePack = new PlaceBlockEventMessagePack(pos, blockId, direction);
-            var payload = MessagePackSerializer.Serialize(messagePack);
-            
-            _eventProtocolProvider.AddBroadcastEvent(EventTag, payload);
-        }
-    }
-    
-    
-    [MessagePackObject]
-    public class PlaceBlockEventMessagePack
-    {
-        [Key(0)] public BlockDataMessagePack BlockData { get; set; }
-        
-        [Obsolete("デシリアライズ用のコンストラクタです。基本的に使用しないでください。")]
-        public PlaceBlockEventMessagePack()
-        {
-        }
-        
-        public PlaceBlockEventMessagePack(Vector3Int blockPos, BlockId blockId, BlockDirection direction)
-        {
-            BlockData = new BlockDataMessagePack(blockId, blockPos, direction);
-        }
-    }
-    
-    
-    [MessagePackObject]
-    public class BlockDataMessagePack
-    {
-        [Key(0)] public int BlockIdInt { get; set; }
-        [Key(1)] public Vector3IntMessagePack BlockPos { get; set; }
-        [Key(2)] public int Direction { get; set; }
-        
-        [IgnoreMember] public BlockDirection BlockDirection => (BlockDirection)Direction;
-        [IgnoreMember] public BlockId BlockId => (BlockId)BlockIdInt;
-        
-        [Obsolete("デシリアライズ用のコンストラクタです。基本的に使用しないでください。")]
-        public BlockDataMessagePack() { }
-        
-        public BlockDataMessagePack(BlockId blockId, Vector3Int blockPos, BlockDirection blockDirection)
-        {
-            BlockIdInt = (int)blockId;
-            BlockPos = new Vector3IntMessagePack(blockPos);
-            Direction = (int)blockDirection;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World/WorldBlockUpdateEvent.cs
-```cs
-using System;
 using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Gear.Common;
+using Game.PlayerInventory;
+using Game.SaveLoad.Interface;
+using Game.SaveLoad.Json;
 using Game.World.Interface.DataStore;
-using UniRx;
+using Microsoft.Extensions.DependencyInjection;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
 using UnityEngine;
 
-namespace Game.World
+namespace Tests.UnitTest.Game.SaveLoad
 {
-    public class WorldBlockUpdateEvent : IWorldBlockUpdateEvent
+    public class GearMachineSaveLoadTest
     {
-        private readonly Subject<BlockUpdateProperties> _onBlockPlaceEvent = new();
-        private readonly Subject<BlockUpdateProperties> _onBlockRemoveEvent = new();
-        public IObservable<BlockUpdateProperties> OnBlockPlaceEvent => _onBlockPlaceEvent;
-        
-        public IObservable<BlockUpdateProperties> OnBlockRemoveEvent => _onBlockRemoveEvent;
-        
-        public IDisposable SubscribePlace(Vector3Int subscribePos, Action<BlockUpdateProperties> blockPlaceEvent)
+        //ギア機械のインベントリのあるブロックを追加した時のテスト
+        //レシピやブロックが変わった時はテストコードを修正してください
+        [Test]
+        public void InventoryBlockTest()
         {
-            return _onBlockPlaceEvent.Subscribe(data =>
-            {
-                if (data.BlockData.BlockPositionInfo.IsContainPos(subscribePos)) blockPlaceEvent(new BlockUpdateProperties(subscribePos, data.BlockData));
-            });
+            //機械の追加
+            var (blockFactory, worldBlockDatastore, _, assembleSaveJsonText, _) = CreateBlockTestModule();
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.GearMachine, new Vector3Int(0, 0), BlockDirection.North, out var gearMachineBlock);
+            var machineInventory = gearMachineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            
+            
+            //レシピ用のアイテムを追加
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(1), 3));
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 1));
+            
+            //処理を開始
+            gearMachineBlock.GetComponent<GearEnergyTransformer>().SupplyPower(new RPM(1000), new Torque(1000), true);
+            GameUpdater.UpdateWithWait();
+            //別のアイテムを追加
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(5), 6));
+            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 4));
+            
+            //リフレクションで機械の状態を設定
+            //機械のレシピの残り時間設定
+            var vanillaMachineProcessor = gearMachineBlock.GetComponent<VanillaMachineProcessorComponent>();
+            //ステータスをセット
+            typeof(VanillaMachineProcessorComponent)
+                .GetProperty("RemainingSecond")
+                .SetValue(vanillaMachineProcessor, 0.3);
+            typeof(VanillaMachineProcessorComponent)
+                .GetProperty("CurrentState")
+                .SetValue(vanillaMachineProcessor, ProcessState.Processing);
+            
+            //機械のアウトプットスロットの設定
+            var outputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(machineInventory);
+            
+            outputInventory.SetItem(1, itemStackFactory.Create(new ItemId(1), 1));
+            outputInventory.SetItem(2, itemStackFactory.Create(new ItemId(3), 2));
+            
+            //レシピIDを取得
+            var recipeId = vanillaMachineProcessor.RecipeGuid;
+            
+            var json = assembleSaveJsonText.AssembleSaveJson();
+            Debug.Log(json);
+            //配置したブロックを削除
+            worldBlockDatastore.RemoveBlock(new Vector3Int(0, 0));
+            
+            
+            //ロードした時に機械の状態が正しいことを確認
+            var (_, loadWorldBlockDatastore, _, _, loadJsonFile) = CreateBlockTestModule();
+            
+            loadJsonFile.Load(json);
+            
+            var loadMachineBlock = loadWorldBlockDatastore.GetBlock(new Vector3Int(0, 0));
+            
+            //ブロックID、intIDが同じであることを確認
+            Assert.AreEqual(gearMachineBlock.BlockId, loadMachineBlock.BlockId);
+            Assert.AreEqual(gearMachineBlock.BlockInstanceId, loadMachineBlock.BlockInstanceId);
+            
+            
+            //機械のレシピの残り時間のチェック
+            var machineProcessor = loadMachineBlock.GetComponent<VanillaMachineProcessorComponent>();
+            Assert.AreEqual(0.3, machineProcessor.RemainingSecond);
+            //レシピIDのチェック
+            Assert.AreEqual(recipeId, machineProcessor.RecipeGuid);
+            //機械のステータスのチェック
+            Assert.AreEqual(ProcessState.Processing, machineProcessor.CurrentState);
+            
+            
+            var loadMachineInventory = loadMachineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            //インプットスロットのチェック
+            var inputInventoryField = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadMachineInventory);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(5), 6), inputInventoryField.InputSlot[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(2), 4), inputInventoryField.InputSlot[1]);
+            
+            //アウトプットスロットのチェック
+            var outputInventoryField = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(loadMachineInventory);
+            Assert.AreEqual(itemStackFactory.CreatEmpty(), outputInventoryField.OutputSlot[0]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(1), 1), outputInventoryField.OutputSlot[1]);
+            Assert.AreEqual(itemStackFactory.Create(new ItemId(3), 2), outputInventoryField.OutputSlot[2]);
         }
         
-        public IDisposable SubscribeRemove(Vector3Int subscribePos, Action<BlockUpdateProperties> blockPlaceEvent)
+        private (IBlockFactory, IWorldBlockDatastore, PlayerInventoryDataStore, AssembleSaveJsonText, WorldLoaderFromJson)
+            CreateBlockTestModule()
         {
-            return _onBlockRemoveEvent.Subscribe(data =>
-            {
-                if (data.BlockData.BlockPositionInfo.IsContainPos(subscribePos)) blockPlaceEvent(new BlockUpdateProperties(subscribePos, data.BlockData));
-            });
-        }
-        
-        public void OnBlockPlaceEventInvoke(Vector3Int pos, WorldBlockData worldBlockData)
-        {
-            _onBlockPlaceEvent.OnNext(new BlockUpdateProperties(pos, worldBlockData));
-        }
-        
-        public void OnBlockRemoveEventInvoke(Vector3Int pos, WorldBlockData worldBlockData)
-        {
-            _onBlockRemoveEvent.OnNext(new BlockUpdateProperties(pos, worldBlockData));
+            var (packet, serviceProvider) =
+                new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var blockFactory = ServerContext.BlockFactory;
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            var assembleSaveJsonText = serviceProvider.GetService<AssembleSaveJsonText>();
+            var playerInventoryDataStore = serviceProvider.GetService<PlayerInventoryDataStore>();
+            var loadJsonFile = serviceProvider.GetService<IWorldSaveDataLoader>() as WorldLoaderFromJson;
+            
+            return (blockFactory, worldBlockDatastore, playerInventoryDataStore, assembleSaveJsonText, loadJsonFile);
         }
     }
 }
 ```
 
-moorestech_client/Assets/Scripts/Client.Game/InGame/Block/BlockShaderAnimation.cs
-```cs
-using Client.Common;
-using Cysharp.Threading.Tasks;
-using DG.Tweening;
-using UnityEngine;
-
-namespace Client.Game.InGame.Block
-{
-    public class BlockShaderAnimation : MonoBehaviour
-    {
-        private const string WorldMinY = "_WorldMinY";
-        private const string WorldMaxY = "_WorldMaxY";
-        private const string DevolveRate = "_DevolveRate";
-        private const string LightPower = "_LightPower";
-        
-        private RendererMaterialReplacerController _rendererMaterialReplacerController;
-        
-        public async UniTask PlaceAnimation()
-        {
-            _rendererMaterialReplacerController ??= new RendererMaterialReplacerController(gameObject);
-            
-            //マテリアルを更新
-            var placeAnimationMaterial = Resources.Load<Material>(MaterialConst.PlaceBlockAnimationMaterial);
-            _rendererMaterialReplacerController.CopyAndSetMaterial(placeAnimationMaterial);
-            
-            //マテリアルにセット
-            var (worldMinY, worldMaxY) = GetWorldMinMaxY();
-            SetMaterialProperty(WorldMinY, worldMinY);
-            SetMaterialProperty(WorldMaxY, worldMaxY);
-            SetMaterialProperty(DevolveRate, 0);
-            SetMaterialProperty(LightPower, 0.6f);
-            
-            //接地されているアニメーション
-            TweenMaterialProperty(DevolveRate, 0, 1, 2.5f, Ease.InOutSine);
-            TweenMaterialProperty(LightPower, 0.6f, 1, 2.0f, Ease.InOutSine);
-            
-            await UniTask.Delay(2000);
-            
-            //最後のフラッシュ
-            SetMaterialProperty(LightPower, 1);
-            TweenMaterialProperty(LightPower, 1, 2, 0.4f, Ease.InOutSine);
-            await UniTask.Delay(200);
-            
-            TweenMaterialProperty(LightPower, 2, 0.5f, 0.2f, Ease.InOutSine);
-            await UniTask.Delay(200);
-            
-            //マテリアルをリセット
-            _rendererMaterialReplacerController.ResetMaterial();
-        }
-        
-        public async UniTask RemoveAnimation()
-        {
-            _rendererMaterialReplacerController ??= new RendererMaterialReplacerController(gameObject);
-            
-            //マテリアルを更新
-            var placeAnimationMaterial = Resources.Load<Material>(MaterialConst.PlaceBlockAnimationMaterial);
-            _rendererMaterialReplacerController.CopyAndSetMaterial(placeAnimationMaterial);
-            
-            //マテリアルにセット
-            var (worldMinY, worldMaxY) = GetWorldMinMaxY();
-            SetMaterialProperty(WorldMinY, worldMinY);
-            SetMaterialProperty(WorldMaxY, worldMaxY);
-            SetMaterialProperty(DevolveRate, 1);
-            SetMaterialProperty(LightPower, 0);
-            
-            //アニメーションを実行
-            TweenMaterialProperty(LightPower, 0, 1, 0.5f, Ease.InOutSine);
-            
-            await UniTask.Delay(250);
-            
-            TweenMaterialProperty(DevolveRate, 1, 0, 0.55f, Ease.InOutSine);
-            
-            await UniTask.Delay(500);
-        }
-        
-        private (float worldMinY, float worldMaxY) GetWorldMinMaxY()
-        {
-            var worldMinY = float.MaxValue;
-            var worldMaxY = float.MinValue;
-            foreach (var renderer in GetComponentsInChildren<Renderer>())
-            {
-                worldMinY = Mathf.Min(worldMinY, renderer.bounds.min.y);
-                worldMaxY = Mathf.Max(worldMaxY, renderer.bounds.max.y);
-            }
-            
-            return (worldMinY, worldMaxY);
-        }
-        
-        private void TweenMaterialProperty(string keyword, float startValue, float endValue, float duration, Ease ease)
-        {
-            var value = startValue;
-            DOTween.To(() => value, x => value = x, endValue, duration).SetEase(ease).OnUpdate(() =>
-            {
-                _rendererMaterialReplacerController.SetPlaceMaterialProperty(keyword, value);
-            });
-        }
-        
-        private void SetMaterialProperty(string keyword, float value)
-        {
-            _rendererMaterialReplacerController.SetPlaceMaterialProperty(keyword, value);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/MinerMiningTest.cs
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Server/CollectBeltConveyorItemsTest.cs
 ```cs
 using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Core.Item.Interface;
+using Core.Master;
 using Core.Update;
-using Game.Block.Blocks.Miner;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Entity.Interface;
+using Game.World.Interface.DataStore;
+using Microsoft.Extensions.DependencyInjection;
+using NUnit.Framework;
+using Server.Boot;
+using Server.Protocol.PacketResponse.Util;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.CombinedTest.Server
+{
+    public class CollectBeltConveyorItemsTest
+    {
+        //4秒で入って出るベルトコンベアで残り1秒で出る時の座標が正しいかどうかをテストする
+        private const double RemainingTime = 0.5;
+        private const int ItemInstanceId = 100;
+        
+        private readonly List<Vector2Int> _plusPlayerCoordinate = new() { new Vector2Int(0, 0) };
+        
+        /// <summary>
+        ///     各方向に向いたベルトコンベア内のアイテムの位置が正しいかどうかをチェックする
+        /// </summary>
+        [Test]
+        public void BlockDirectionItemPositionTest()
+        {
+            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldDataStore = ServerContext.WorldBlockDatastore;
+            var entityFactory = serviceProvider.GetService<IEntityFactory>();
+            
+            //x,yがともにプラスの時のテスト 
+            
+            //北向きに設置
+            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.North, worldDataStore);
+            
+            //エンティティを取得
+            var itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            const float defaultY = VanillaBeltConveyorComponent.DefaultBeltConveyorHeight;
+            Assert.AreEqual(0.5, itemEntity.Position.x); //0,0に設置してベルトコンベアの中心にアイテムがあるため、Z座標は0.5となる 
+            Assert.AreEqual(defaultY, itemEntity.Position.y); //2次元座標から3次元座標に変換されているため、Y座標は0となる
+            Assert.AreEqual(0.75, itemEntity.Position.z); //4秒のベルトコンベアで残り1秒の時の座標のため、1の3/4の位置にある
+            //エンティティを検証
+            Assert.AreEqual(ItemInstanceId, itemEntity.InstanceId.AsPrimitive());
+            Assert.AreEqual(VanillaEntityType.VanillaItem, itemEntity.EntityType);
+            
+            
+            //東向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
+            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.East, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(0.75, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(0.5, itemEntity.Position.z);
+            
+            
+            //ブロックを削除し南向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
+            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.South, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(0.5, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(0.25, itemEntity.Position.z);
+            
+            
+            //ブロックを削除し西向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
+            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.West, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //ブロックを削除し座標を検証
+            Assert.AreEqual(0.25, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(0.5, itemEntity.Position.z);
+            
+            
+            //x、yがマイナスであるときのテスト
+            //北向きに設
+            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
+            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.North, worldDataStore);
+            
+            //エンティティを取得
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(-0.5, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(-0.25, itemEntity.Position.z); //ブロックの座標がマイナスなので-1を原点として3/4の値である-0.25となる
+            
+            
+            //東向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
+            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.East, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(-0.25, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(-0.5, itemEntity.Position.z);
+            
+            
+            //ブロックを削除し南向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
+            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.South, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(-0.5, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(-0.75, itemEntity.Position.z);
+            
+            
+            //ブロックを削除し西向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
+            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.West, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //ブロックを削除し座標を検証
+            Assert.AreEqual(-0.75, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(-0.5, itemEntity.Position.z);
+        }
+        
+        
+        /// <summary>
+        ///     ベルトコンベアから別のベルトコンベアに移ってもInstanceIdは変化しないことをテスト
+        /// </summary>
+        [Test]
+        public void ItemInstanceIdTest()
+        {
+            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var worldDataStore = ServerContext.WorldBlockDatastore;
+            
+            worldDataStore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, new Vector3Int(0, 0, 1), BlockDirection.North, out var belt2);
+            //二つのベルトコンベアを繋がるように設置
+            
+            var belt1 = CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.North, worldDataStore);
+            
+            //4秒間アップデートする
+            var now = DateTime.Now;
+            while (DateTime.Now - now < TimeSpan.FromSeconds(RemainingTime * 1.1)) GameUpdater.UpdateWithWait();
+            
+            //ベルトコンベアからアイテムを取得
+            var inventoryItemsField = typeof(VanillaBeltConveyorComponent).GetField("_inventoryItems", BindingFlags.NonPublic | BindingFlags.Instance);
+            var inventory2Items = (BeltConveyorInventoryItem[])inventoryItemsField.GetValue(belt2.GetComponent<VanillaBeltConveyorComponent>());
+            
+            //InstanceIdが変化していないことを検証
+            Assert.AreEqual(ItemInstanceId, inventory2Items[3].ItemInstanceId.AsPrimitive());
+        }
+        
+        
+        private IBlock CreateOneItemInsertedItem(Vector3Int pos, BlockDirection blockDirection, IWorldBlockDatastore datastore)
+        {
+            datastore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, pos, blockDirection, out var beltConveyor);
+            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            
+            //リフレクションで_inventoryItemsを取得
+            var inventoryItemsField = typeof(VanillaBeltConveyorComponent).GetField("_inventoryItems", BindingFlags.NonPublic | BindingFlags.Instance);
+            var inventoryItems = (BeltConveyorInventoryItem[])inventoryItemsField.GetValue(beltConveyorComponent);
+            
+            inventoryItems[0] = new BeltConveyorInventoryItem(new ItemId(1), new ItemInstanceId(ItemInstanceId));
+            inventoryItems[1] = null;
+            inventoryItems[2] = null;
+            inventoryItems[3] = null;
+            
+            inventoryItems[0].RemainingPercent = 0.25f;
+            
+            return beltConveyor;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Game/BeltConveyorInsertTest.cs
+```cs
+using System;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Chest;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.CombinedTest.Game
+{
+    public class BeltConveyorInsertTest
+    {
+        //2つのアイテムがチェストから出されてベルトコンベアに入り、全てチェストに入るテスト
+        [Test]
+        public void TwoItemIoTest()
+        {
+            var (_, saveServiceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            //それぞれを設置
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.ChestId, Vector3Int.zero, BlockDirection.North, out var inputChest);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, new Vector3Int(0, 0, 1), BlockDirection.North, out var beltConveyor);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.ChestId, new Vector3Int(0, 0, 2), BlockDirection.North, out var outputChest);
+            
+            //インプットチェストにアイテムを2つ入れる
+            var inputChestComponent = inputChest.GetComponent<VanillaChestComponent>();
+            inputChestComponent.SetItem(0, new ItemId(1), 2);
+            
+            //ベルトコンベアのアイテムが出てから入るまでの6秒間アップデートする
+            var now = DateTime.Now;
+            while (DateTime.Now - now < TimeSpan.FromSeconds(5)) GameUpdater.UpdateWithWait();
+            
+            //アイテムが出ているか確認
+            Assert.AreEqual(0, inputChestComponent.GetItem(0).Count);
+            //アイテムが入っているか確認
+            var outputChestComponent = outputChest.GetComponent<VanillaChestComponent>();
+            Assert.AreEqual(2, outputChestComponent.GetItem(0).Count);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/BeltConveyorTest.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.BeltConveyor;
 using Game.Block.Component;
 using Game.Block.Interface;
 using Game.Block.Interface.Component;
 using Game.Block.Interface.Extension;
 using Game.Context;
-using Game.EnergySystem;
-using Game.Map.Interface.Vein;
 using Mooresmaster.Model.BlockConnectInfoModule;
+using Mooresmaster.Model.BlocksModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module;
+using Tests.Module.TestMod;
+using UnityEngine;
+using Random = System.Random;
+
+namespace Tests.CombinedTest.Core
+{
+    /// <summary>
+    ///     コンフィグが変わったらこのテストを変更に応じて変更してください
+    /// </summary>
+    public class BeltConveyorTest
+    {
+        //一定個数以上アイテムが入らないテストした後、正しく次に出力されるかのテスト
+        [Test]
+        public void FullInsertAndChangeConnectorBeltConveyorTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            var random = new Random(4123);
+            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
+            {
+                var id = new ItemId(random.Next(0, 10));
+                
+                var item = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount + 1);
+                var beltConveyor = ServerContext.BlockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+                
+                var endTime = DateTime.Now.AddSeconds(beltConveyorParam.TimeOfItemEnterToExit);
+                
+                while (DateTime.Now < endTime.AddSeconds(0.1))
+                {
+                    item = beltConveyorComponent.InsertItem(item);
+                    GameUpdater.UpdateWithWait();
+                }
+                
+                Assert.AreEqual(item.Count, 1);
+                
+                var dummy = new DummyBlockInventory();
+                
+                var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+                connectInventory.Add(dummy, (null, null));
+                GameUpdater.UpdateWithWait();
+                
+                Assert.AreEqual(itemStackFactory.Create(id, 1).ToString(), dummy.InsertedItems[0].ToString());
+            }
+        }
+        
+        //一個のアイテムが入って正しく搬出されるかのテスト
+        [Test]
+        public void InsertBeltConveyorTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
+            var blockFactory = ServerContext.BlockFactory;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            
+            var id = new ItemId(2);
+            const int count = 3;
+            var item = itemStackFactory.Create(id, count);
+            var dummy = new DummyBlockInventory();
+            
+            // アイテムを挿入
+            var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            
+            var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            connectInventory.Add(dummy, (null, null));
+            
+            var expectedEndTime = DateTime.Now.AddSeconds(beltConveyorParam.TimeOfItemEnterToExit);
+            var outputItem = beltConveyorComponent.InsertItem(item);
+            
+            //5秒以上経過したらループを抜ける 
+            while (!dummy.IsItemExists) GameUpdater.UpdateWithWait();
+            
+            
+            //チェック
+            Assert.True(DateTime.Now <= expectedEndTime.AddSeconds(0.1));
+            Assert.True(expectedEndTime.AddSeconds(-0.1) <= DateTime.Now);
+            
+            Debug.Log($"{(DateTime.Now - expectedEndTime).TotalSeconds}");
+            
+            Assert.True(outputItem.Equals(itemStackFactory.Create(id, count - 1)));
+            var tmp = itemStackFactory.Create(id, 1);
+            Debug.Log($"{tmp} {dummy.InsertedItems[0]}");
+            Assert.AreEqual(tmp.ToString(), dummy.InsertedItems[0].ToString());
+        }
+        
+        //ベルトコンベアのインベントリをフルにするテスト
+        [Test]
+        public void FullInsertBeltConveyorTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
+            var blockFactory = ServerContext.BlockFactory;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            var random = new Random(4123);
+            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
+            {
+                var id = new ItemId(random.Next(1, 11));
+                var item = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount + 1);
+                var dummy = new DummyBlockInventory(beltConveyorParam.BeltConveyorItemCount);
+                var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+                
+                var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+                connectInventory.Add(dummy, (null, null));
+                
+                while (!dummy.IsItemExists)
+                {
+                    item = beltConveyorComponent.InsertItem(item);
+                    GameUpdater.UpdateWithWait();
+                }
+                
+                Assert.True(item.Equals(itemStackFactory.Create(id, 0)));
+                var tmp = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount);
+                Assert.True(dummy.InsertedItems[0].Equals(tmp));
+            }
+        }
+        
+        //二つのアイテムが入ったとき、一方しか入らないテスト
+        [Test]
+        public void Insert2ItemBeltConveyorTest()
+        {
+            var (_, serviceProvider) =
+                new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var blockFactory = ServerContext.BlockFactory;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            var random = new Random(4123);
+            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
+            {
+                //必要な変数を作成
+                var item1 = itemStackFactory.Create(new ItemId(random.Next(1, 11)), random.Next(1, 10));
+                var item2 = itemStackFactory.Create(new ItemId(random.Next(1, 11)), random.Next(1, 10));
+                
+                var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId , new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+                
+                var item1Out = beltConveyorComponent.InsertItem(item1);
+                var item2Out = beltConveyorComponent.InsertItem(item2);
+                
+                Assert.True(item1Out.Equals(item1.SubItem(1)));
+                Assert.True(item2Out.Equals(item2));
+            }
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/GearBeltConveyorTest.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Component;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Gear.Common;
+using Microsoft.Extensions.DependencyInjection;
+using Mooresmaster.Model.BlockConnectInfoModule;
+using Mooresmaster.Model.BlocksModule;
 using NUnit.Framework;
 using Server.Boot;
 using Tests.Module;
@@ -760,86 +751,69 @@ using UnityEngine;
 
 namespace Tests.CombinedTest.Core
 {
-    public class MinerMiningTest
+    public class GearBeltConveyorTest
     {
-        //一定時間たったら鉱石が出るテスト
+        // トルクの供給率が100%のとき、指定した時間でアイテムが出てくるテスト
         [Test]
-        public void MiningTest()
+        public void OutputTestWhenTorqueSuppliedRateIs100()
         {
             var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
             
-            var blockFactory = ServerContext.BlockFactory;
+            var itemStackFactory = ServerContext.ItemStackFactory;
             var worldBlockDatastore = ServerContext.WorldBlockDatastore;
             
-            //手動で鉱石の設定を行う
-            var (mapVein, pos) = GetMapVein();
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.ElectricMinerId, pos, BlockDirection.North, out _);
-            var miner = worldBlockDatastore.GetBlock(pos);
-            var minerComponent = miner.GetComponent<VanillaMinerProcessorComponent>();
-            
-            var miningItems = (List<IItemStack>)typeof(VanillaMinerProcessorComponent).GetField("_miningItems", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(minerComponent);
-            var miningItemId = miningItems[0].Id;
-            var miningTime = (float)typeof(VanillaMinerProcessorComponent).GetField("_defaultMiningTime", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(minerComponent);
+            const int id = 2;
+            const int count = 3;
+            var item = itemStackFactory.Create(new ItemId(id), count);
+            var dummy = new DummyBlockInventory();
             
             
-            var dummyInventory = new DummyBlockInventory();
-            //接続先ブロックの設定
-            //本当はダメなことしているけどテストだから許してヒヤシンス
-            var minerConnectors = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)miner.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
-            minerConnectors.Add(dummyInventory, (null, null));
+            // gearBeltConveyorブロックを生成
+            var gearBeltConveyorPosition = new Vector3Int(0, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.GearBeltConveyor, gearBeltConveyorPosition, BlockDirection.North, out var gearBeltConveyor);
+            var beltConveyorComponent = gearBeltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)gearBeltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            connectInventory.Add(dummy, (null, null));
             
-            //電力の設定
-            var segment = new EnergySegment();
-            segment.AddEnergyConsumer(miner.GetComponent<IElectricConsumer>());
-            segment.AddGenerator(new TestElectricGenerator(new ElectricPower(10000), new BlockInstanceId(10)));
+            // generatorブロックを作成
+            var generatorPosition = new Vector3Int(1, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.East, out var generator);
             
-            var mineEndTime = DateTime.Now.AddSeconds(miningTime);
+            // testGearブロックを作成
+            var testGearPosition = new Vector3Int(2, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, testGearPosition, BlockDirection.East, out var testGear);
+            
+            var gearNetworkDatastore = serviceProvider.GetService<GearNetworkDatastore>();
+            IReadOnlyDictionary<GearNetworkId, GearNetwork> gearNetwork = gearNetworkDatastore.GearNetworks;
             
             
-            //テストコードの準備完了
-            //鉱石1個分の採掘時間待機
-            while (mineEndTime.AddSeconds(0.05).CompareTo(DateTime.Now) == 1) GameUpdater.UpdateWithWait();
+            const int torqueRate = 1;
+            const int generatorRpm = 10;
+            var gearBeltConveyorBlockParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.GearBeltConveyor).BlockParam as GearBeltConveyorBlockParam;
+            var duration = 1f / (generatorRpm * torqueRate * gearBeltConveyorBlockParam.BeltConveyorSpeed);
+            var expectedEndTime = DateTime.Now.AddSeconds(duration);
+            var startTime = DateTime.Now;
+            beltConveyorComponent.InsertItem(item);
             
-            //鉱石1個が出力されているかチェック
-            Assert.AreEqual(miningItemId, dummyInventory.InsertedItems[0].Id);
-            Assert.AreEqual(1, dummyInventory.InsertedItems[0].Count);
-            
-            //コネクターを外す
-            minerConnectors.Remove(dummyInventory);
-            
-            //鉱石2個分の採掘時間待機
-            mineEndTime = DateTime.Now.AddSeconds(miningTime * 2);
-            while (mineEndTime.AddSeconds(0.05).CompareTo(DateTime.Now) == 1) GameUpdater.UpdateWithWait();
-            
-            //鉱石2個が残っているかチェック
-            var outputSlot = miner.GetComponent<VanillaMinerProcessorComponent>().InventoryItems[0];
-            Assert.AreEqual(miningItemId, outputSlot.Id);
-            Assert.AreEqual(2, outputSlot.Count);
-            
-            //またコネクターをつなげる
-            minerConnectors.Add(dummyInventory, (null, null));
-            
-            //コネクターにアイテムを入れるためのアップデート
-            GameUpdater.UpdateWithWait();
-            
-            //アイテムがさらに2個追加で入っているかチェック
-            Assert.AreEqual(miningItemId, dummyInventory.InsertedItems[0].Id);
-            Assert.AreEqual(3, dummyInventory.InsertedItems[0].Count);
-        }
-        
-        public static (IMapVein mapVein, Vector3Int pos) GetMapVein()
-        {
-            var pos = new Vector3Int(0, 0);
-            for (var i = 0; i < 500; i++)
-            for (var j = 0; j < 500; j++)
+            // for (var i = 0; i < 100; i++)
+            // {
+            //     GameUpdater.UpdateWithWait();
+            // }
+            var c = 0;
+            while (!dummy.IsItemExists)
             {
-                List<IMapVein> veins = ServerContext.MapVeinDatastore.GetOverVeins(new Vector3Int(i, j));
-                if (veins.Count == 0) continue;
-                
-                return (veins[0], new Vector3Int(i, j));
+                c++;
+                GameUpdater.UpdateWithWait();
+                var elapsed = DateTime.Now - startTime;
+                if (elapsed.TotalSeconds > 20) Assert.Fail();
             }
             
-            return (null, pos);
+            Assert.True(dummy.IsItemExists);
+            
+            var now = DateTime.Now;
+            Debug.Log($"{now} {expectedEndTime}\n{(now - startTime).TotalSeconds}\n{(expectedEndTime - now).TotalSeconds}\n{duration}\n{c}");
+            Assert.True(now <= expectedEndTime.AddSeconds(0.4));
+            Assert.True(expectedEndTime.AddSeconds(-0.4) <= now);
         }
     }
 }
@@ -850,7 +824,6 @@ moorestech_server/Assets/Scripts/Game.Block/Blocks/ItemShooter/ItemShooterCompon
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Core.Const;
 using Core.Item.Interface;
 using Core.Master;
 using Core.Update;
@@ -867,19 +840,28 @@ namespace Game.Block.Blocks.ItemShooter
 {
     public class ItemShooterComponent : IItemCollectableBeltConveyor, IBlockInventory, IBlockSaveState, IUpdatableBlockComponent
     {
+        public BeltConveyorSlopeType SlopeType { get; }
         public IReadOnlyList<IOnBeltConveyorItem> BeltConveyorItems => _inventoryItems;
         private readonly ShooterInventoryItem[] _inventoryItems;
         
         private readonly BlockConnectorComponent<IBlockInventory> _blockConnectorComponent;
         private readonly ItemShooterBlockParam _itemShooterBlockParam;
+        private const float InsertItemInterval = 1f; // TODO to master
+        
+        private float _lastInsertElapsedTime;
         
         public ItemShooterComponent(BlockConnectorComponent<IBlockInventory> blockConnectorComponent, ItemShooterBlockParam itemShooterBlockParam)
         {
             _blockConnectorComponent = blockConnectorComponent;
             _itemShooterBlockParam = itemShooterBlockParam;
+            SlopeType = itemShooterBlockParam.SlopeType switch
+            {
+                ItemShooterBlockParam.SlopeTypeConst.Up => BeltConveyorSlopeType.Up,
+                ItemShooterBlockParam.SlopeTypeConst.Down => BeltConveyorSlopeType.Down,
+                ItemShooterBlockParam.SlopeTypeConst.Straight => BeltConveyorSlopeType.Straight
+            };
             
             _inventoryItems = new ShooterInventoryItem[_itemShooterBlockParam.InventoryItemNum];
-            
         }
         
         public ItemShooterComponent(string state, BlockConnectorComponent<IBlockInventory> blockConnectorComponent, ItemShooterBlockParam itemShooterBlockParam) :
@@ -905,6 +887,7 @@ namespace Game.Block.Blocks.ItemShooter
         {
             BlockException.CheckDestroy(this);
             
+            _lastInsertElapsedTime += (float)GameUpdater.UpdateSecondTime;
             var count = _inventoryItems.Length;
             
             for (var i = 0; i < count; i++)
@@ -966,17 +949,21 @@ namespace Game.Block.Blocks.ItemShooter
         {
             BlockException.CheckDestroy(this);
             
-            //新しく挿入可能か
+            // インサート間隔をチェック
+            if (_lastInsertElapsedTime < InsertItemInterval) return itemStack;
+            
+            // インサート可能なスロットに挿入
             for (var i = 0; i < _inventoryItems.Length; i++)
             {
                 if (_inventoryItems[i] != null) continue;
                 
                 _inventoryItems[i] = new ShooterInventoryItem(itemStack.Id, itemStack.ItemInstanceId, _itemShooterBlockParam.InitialShootSpeed);
+                //挿入したのでアイテムを減らして返す
+                _lastInsertElapsedTime = 0;
                 return itemStack.SubItem(1);
             }
             
-            //挿入したのでアイテムを減らして返す
-            return itemStack.SubItem(1);
+            return itemStack;
         }
         
         public IItemStack GetItem(int slot)
@@ -1040,261 +1027,58 @@ namespace Game.Block.Blocks.ItemShooter
 }
 ```
 
-moorestech_client/Assets/Scripts/Client.Game/InGame/UI/UIState/BlockInventoryState.cs
+moorestech_server/Assets/Scripts/Game.Block/Factory/BlockTemplate/VanillaBeltConveyorTemplate.cs
 ```cs
-using System;
-using System.Threading;
-using Client.Game.InGame.Block;
-using Client.Game.InGame.Context;
-using Client.Game.InGame.Control;
-using Client.Game.InGame.UI.Inventory.Main;
-using Client.Game.InGame.UI.Inventory.Sub;
-using Client.Input;
-using Core.Master;
-using Cysharp.Threading.Tasks;
-using UnityEngine;
-using static Mooresmaster.Model.BlocksModule.BlockMasterElement;
+using System.Collections.Generic;
+using Game.Block.Blocks;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Mooresmaster.Model.BlocksModule;
 
-namespace Client.Game.InGame.UI.UIState
+namespace Game.Block.Factory.BlockTemplate
 {
-    public class BlockInventoryState : IUIState
+    public class VanillaBeltConveyorTemplate : IBlockTemplate
     {
-        private readonly BlockGameObjectDataStore _blockGameObjectDataStore;
-        private readonly BlockInventoryView _blockInventoryView;
-        private readonly PlayerInventoryViewController _playerInventoryViewController;
+        public const string Hueru = "gear belt conveyor hueru";
+        public const string Kieru = "gear belt conveyor kieru";
         
-        private CancellationTokenSource _cancellationTokenSource;
-        
-        private Vector3Int _openBlockPos;
-        
-        public BlockInventoryState(BlockInventoryView blockInventoryView, BlockGameObjectDataStore blockGameObjectDataStore, PlayerInventoryViewController playerInventoryViewController)
+        public IBlock New(BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
         {
-            _blockGameObjectDataStore = blockGameObjectDataStore;
-            _playerInventoryViewController = playerInventoryViewController;
-            _blockInventoryView = blockInventoryView;
-            
-            blockInventoryView.SetActive(false);
+            return GetBlock(null, blockMasterElement, blockInstanceId, blockPositionInfo);
         }
         
-        public UIStateEnum GetNext()
+        public IBlock Load(string state, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
         {
-            if (InputManager.UI.CloseUI.GetKeyDown || InputManager.UI.OpenInventory.GetKeyDown) return UIStateEnum.GameScreen;
-            
-            return UIStateEnum.Current;
+            //TODo UP bletからの入力を受付?
+            return GetBlock(state, blockMasterElement, blockInstanceId, blockPositionInfo);
         }
         
-        public void OnEnter(UIStateEnum lastStateEnum)
+        private BlockSystem GetBlock(string state, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
         {
-            if (!BlockClickDetect.TryGetCursorOnBlockPosition(out _openBlockPos)) Debug.LogError("開いたブロックの座標が取得できませんでした。UIステートに不具合があります。");
-            if (!_blockGameObjectDataStore.ContainsBlockGameObject(_openBlockPos)) return;
+            var beltParam = blockMasterElement.BlockParam as BeltConveyorBlockParam;
+            var blockName = blockMasterElement.Name;
             
-            InputManager.MouseCursorVisible(true);
-            
-            //サーバーのリクエスト
-            ClientContext.VanillaApi.SendOnly.SetOpenCloseBlock(_openBlockPos, true);
-            _cancellationTokenSource = new CancellationTokenSource();
-            UpdateBlockInventory(_openBlockPos, _cancellationTokenSource.Token).Forget();
-            
-            
-            //ブロックインベントリのビューを設定する
-            var id = _blockGameObjectDataStore.GetBlockGameObject(_openBlockPos).BlockId;
-            var blockMaster = MasterHolder.BlockMaster.GetBlockMaster(id);
-            
-            var type = blockMaster.BlockType switch
+            var slopeType = beltParam.SlopeType switch
             {
-                BlockTypeConst.Chest => BlockInventoryType.Chest,
-                BlockTypeConst.ElectricMiner => BlockInventoryType.Miner,
-                BlockTypeConst.ElectricMachine => BlockInventoryType.Machine,
-                BlockTypeConst.ElectricGenerator => BlockInventoryType.Generator,
-                _ => throw new ArgumentOutOfRangeException(),
+                ItemShooterBlockParam.SlopeTypeConst.Up => BeltConveyorSlopeType.Up,
+                ItemShooterBlockParam.SlopeTypeConst.Down => BeltConveyorSlopeType.Down,
+                ItemShooterBlockParam.SlopeTypeConst.Straight => BeltConveyorSlopeType.Straight
+            };
+            var connectorComponent = BlockTemplateUtil.CreateInventoryConnector(beltParam.InventoryConnectors, blockPositionInfo);
+            var beltComponent = state == null ? 
+                new VanillaBeltConveyorComponent(beltParam.BeltConveyorItemCount, beltParam.TimeOfItemEnterToExit, connectorComponent, blockName, slopeType) : 
+                new VanillaBeltConveyorComponent(state, beltParam.BeltConveyorItemCount, beltParam.TimeOfItemEnterToExit, connectorComponent, blockName, slopeType);
+            
+            
+            var components = new List<IBlockComponent>
+            {
+                beltComponent,
+                connectorComponent
             };
             
-            _blockInventoryView.SetBlockInventoryType(type, _openBlockPos, blockMaster.BlockParam, id);
-            
-            //UIのオブジェクトをオンにする
-            _blockInventoryView.SetActive(true);
-            _playerInventoryViewController.SetActive(true);
-            _playerInventoryViewController.SetSubInventory(_blockInventoryView);
+            return new BlockSystem(blockInstanceId, blockMasterElement.BlockGuid, components, blockPositionInfo);
         }
-        
-        public void OnExit()
-        {
-            _cancellationTokenSource.Cancel();
-            _cancellationTokenSource = null;
-            
-            ClientContext.VanillaApi.SendOnly.SetOpenCloseBlock(_openBlockPos, false);
-            
-            _blockInventoryView.SetActive(false);
-            _playerInventoryViewController.SetActive(false);
-        }
-        
-        private async UniTask UpdateBlockInventory(Vector3Int pos, CancellationToken ct)
-        {
-            var response = await ClientContext.VanillaApi.Response.GetBlockInventory(pos, ct);
-            _blockInventoryView.SetItemList(response);
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/UI/UIState/DeleteBlockState.cs
-```cs
-using Client.Game.InGame.Block;
-using Client.Game.InGame.Context;
-using Client.Game.InGame.Control;
-using Client.Game.InGame.UI.UIState.UIObject;
-using Client.Input;
-using UnityEngine;
-
-namespace Client.Game.InGame.UI.UIState
-{
-    public class DeleteBlockState : IUIState
-    {
-        private readonly DeleteBarObject _deleteBarObject;
-        private readonly InGameCameraController _inGameCameraController;
-        
-        private BlockGameObject _removeTargetBlock;
-        
-        public DeleteBlockState(DeleteBarObject deleteBarObject, InGameCameraController inGameCameraController)
-        {
-            _inGameCameraController = inGameCameraController;
-            _deleteBarObject = deleteBarObject;
-            deleteBarObject.gameObject.SetActive(false);
-        }
-        
-        public UIStateEnum GetNext()
-        {
-            if (InputManager.UI.CloseUI.GetKeyDown || InputManager.UI.BlockDelete.GetKeyDown) return UIStateEnum.GameScreen;
-            
-            if (InputManager.UI.OpenInventory.GetKeyDown) return UIStateEnum.PlayerInventory;
-            if (InputManager.UI.OpenMenu.GetKeyDown) return UIStateEnum.PauseMenu;
-            
-            if (BlockClickDetect.TryGetCursorOnBlock(out var blockGameObject))
-            {
-                if (_removeTargetBlock == null || _removeTargetBlock != blockGameObject)
-                {
-                    if (_removeTargetBlock != null) _removeTargetBlock.ResetMaterial();
-                    
-                    _removeTargetBlock = blockGameObject;
-                    _removeTargetBlock.SetRemovePreviewing();
-                }
-            }
-            else if (_removeTargetBlock != null)
-            {
-                _removeTargetBlock.ResetMaterial();
-                _removeTargetBlock = null;
-            }
-            
-            
-            if (InputManager.Playable.ScreenLeftClick.GetKeyDown && _removeTargetBlock != null)
-            {
-                var blockPosition = _removeTargetBlock.BlockPosInfo.OriginalPos;
-                ClientContext.VanillaApi.SendOnly.BlockRemove(blockPosition);
-            }
-            
-            //TODO InputSystemのリファクタ対象
-            if (UnityEngine.Input.GetMouseButtonDown(1))
-            {
-                InputManager.MouseCursorVisible(false);
-                _inGameCameraController.SetControllable(true);
-            }
-            
-            //TODO InputSystemのリファクタ対象
-            if (UnityEngine.Input.GetMouseButtonUp(1))
-            {
-                InputManager.MouseCursorVisible(true);
-                _inGameCameraController.SetControllable(false);
-            }
-            
-            return UIStateEnum.Current;
-        }
-        
-        public void OnEnter(UIStateEnum lastStateEnum)
-        {
-            _deleteBarObject.gameObject.SetActive(true);
-            InputManager.MouseCursorVisible(true);
-            _inGameCameraController.SetControllable(false);
-        }
-        
-        public void OnExit()
-        {
-            if (_removeTargetBlock != null) _removeTargetBlock.ResetMaterial();
-            _deleteBarObject.gameObject.SetActive(false);
-            InputManager.MouseCursorVisible(false);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Server.Event/EventReceive/OpenableBlockInventoryUpdateEventPacket.cs
-```cs
-using System;
-using Core.Item.Interface;
-using Game.Block.Interface.Event;
-using Game.Context;
-using Game.PlayerInventory.Interface;
-using MessagePack;
-using Server.Util.MessagePack;
-using UnityEngine;
-
-namespace Server.Event.EventReceive
-{
-    /// <summary>
-    ///     TODO これいる？どうせステートの変更を送るんだから、そこに入れたらいいんじゃないの？
-    /// </summary>
-    public class OpenableBlockInventoryUpdateEventPacket
-    {
-        public const string EventTag = "va:event:blockInvUpdate";
-        
-        private readonly EventProtocolProvider _eventProtocolProvider;
-        private readonly IBlockInventoryOpenStateDataStore _inventoryOpenStateDataStore;
-        
-        private DateTime _now = DateTime.Now;
-        
-        public OpenableBlockInventoryUpdateEventPacket(EventProtocolProvider eventProtocolProvider, IBlockInventoryOpenStateDataStore inventoryOpenStateDataStore)
-        {
-            _eventProtocolProvider = eventProtocolProvider;
-            _inventoryOpenStateDataStore = inventoryOpenStateDataStore;
-            ServerContext.BlockOpenableInventoryUpdateEvent.Subscribe(InventoryUpdateEvent);
-        }
-        
-        
-        private void InventoryUpdateEvent(BlockOpenableInventoryUpdateEventProperties properties)
-        {
-            //そのブロックを開いているプレイヤーをリストアップ
-            var playerIds = _inventoryOpenStateDataStore.GetBlockInventoryOpenPlayers(properties.BlockInstanceId);
-            if (playerIds.Count == 0) return;
-            
-            var pos = ServerContext.WorldBlockDatastore.GetBlockPosition(properties.BlockInstanceId);
-            var messagePack = new OpenableBlockInventoryUpdateEventMessagePack(pos, properties.Slot, properties.ItemStack);
-            var payload = MessagePackSerializer.Serialize(messagePack);
-            
-            //プレイヤーごとにイベントを送信
-            foreach (var id in playerIds) _eventProtocolProvider.AddEvent(id, EventTag, payload);
-        }
-    }
-    
-    
-    [MessagePackObject]
-    public class OpenableBlockInventoryUpdateEventMessagePack
-    {
-        [Obsolete("デシリアライズ用のコンストラクタです。基本的に使用しないでください。")]
-        public OpenableBlockInventoryUpdateEventMessagePack()
-        {
-        }
-        
-        public OpenableBlockInventoryUpdateEventMessagePack(Vector3Int pos, int slot, IItemStack item)
-        {
-            Position = new Vector3IntMessagePack(pos);
-            Slot = slot;
-            Item = new ItemMessagePack(item.Id, item.Count);
-        }
-        
-        [Key(0)] public Vector3IntMessagePack Position { get; set; }
-        
-        [Key(1)] public int Slot { get; set; }
-        
-        [Key(2)] public ItemMessagePack Item { get; set; }
     }
 }
 ```
@@ -1479,1638 +1263,1361 @@ namespace Game.Block.Blocks.Machine.Inventory
 }
 ```
 
-moorestech_server/Assets/Scripts/Tests.Module/TestElectricGenerator.cs
+moorestech_server/Assets/Scripts/Game.Block/Blocks/Service/ConnectingInventoryListPriorityInsertItemService.cs
 ```cs
-using Game.Block.Interface;
-using Game.EnergySystem;
+using System.Collections.Generic;
+using System.Linq;
+using Core.Const;
+using Core.Item.Interface;
+using Core.Master;
+using Game.Block.Component;
+using Game.Block.Interface.Component;
 
-namespace Tests.Module
+namespace Game.Block.Blocks.Service
 {
-    //デバック用で無限に電力を供給できる
-    public class TestElectricGenerator : IElectricGenerator
+    /// <summary>
+    ///     順番にアイテムに入れ続けるシステム
+    /// </summary>
+    public class ConnectingInventoryListPriorityInsertItemService
     {
-        private readonly ElectricPower _power;
+        private readonly BlockConnectorComponent<IBlockInventory> _blockConnectorComponent;
         
-        public TestElectricGenerator(ElectricPower power, BlockInstanceId blockInstanceId)
+        private int _index = -1;
+        
+        public ConnectingInventoryListPriorityInsertItemService(BlockConnectorComponent<IBlockInventory> blockConnectorComponent)
         {
-            _power = power;
-            BlockInstanceId = blockInstanceId;
+            _blockConnectorComponent = blockConnectorComponent;
         }
         
-        public BlockInstanceId BlockInstanceId { get; }
-        
-        public ElectricPower OutputEnergy()
+        public IItemStack InsertItem(IItemStack itemStack)
         {
-            return _power;
+            IReadOnlyList<IBlockInventory> inventories = _blockConnectorComponent.ConnectedTargets.Keys.ToArray();
+            
+            for (var i = 0; i < inventories.Count && itemStack.Id != ItemMaster.EmptyItemId; i++)
+                lock (inventories)
+                {
+                    AddIndex();
+                    itemStack = inventories[_index].InsertItem(itemStack);
+                }
+            
+            return itemStack;
         }
         
-        public bool IsDestroy { get; }
-        
-        public void Destroy()
+        private void AddIndex()
         {
+            _index++;
+            if (_blockConnectorComponent.ConnectedTargets.Count <= _index) _index = 0;
         }
     }
 }
 ```
 
-moorestech_client/Assets/Scripts/Client.Game/InGame/Context/BlockGameObjectContainer.cs
+moorestech_server/Assets/Scripts/Game.CraftChainer/Util/ItemRecipeViewerDataContainer.cs
 ```cs
 using System.Collections.Generic;
-using Client.Game.InGame.Block;
-using Client.Game.InGame.BlockSystem;
-using Client.Game.InGame.BlockSystem.PlaceSystem;
-using Client.Game.InGame.BlockSystem.StateProcessor;
-using Client.Game.InGame.Define;
+using System.Linq;
 using Core.Master;
-using Cysharp.Threading.Tasks;
-using Game.Block;
+using Mooresmaster.Model.CraftRecipesModule;
+using Mooresmaster.Model.MachineRecipesModule;
+
+namespace Game.CraftChainer.Util
+{
+    // TODO クラフトレシピ改善時にこれを使う
+    public class ItemRecipeViewerDataContainer
+    {
+        private readonly Dictionary<ItemId, RecipeViewerItemRecipes> _recipeViewerElements = new();
+        
+        public ItemRecipeViewerDataContainer()
+        {
+            // そのアイテムを作成するための機械のレシピを取得
+            // Get the recipe of the machine to create the item
+            var machineRecipeDictionary = new Dictionary<ItemId, List<MachineRecipeMasterElement>>();
+            foreach (var machineRecipeMaster in MasterHolder.MachineRecipesMaster.MachineRecipes.Data)
+            {
+                foreach (var outputItem in machineRecipeMaster.OutputItems)
+                {
+                    var itemId = MasterHolder.ItemMaster.GetItemId(outputItem.ItemGuid);
+                    if (!machineRecipeDictionary.ContainsKey(itemId))
+                    {
+                        machineRecipeDictionary.Add(itemId, new List<MachineRecipeMasterElement>());
+                    }
+                    
+                    machineRecipeDictionary[itemId].Add(machineRecipeMaster);
+                }
+            }
+            
+            // そのアイテムを作成するためのクラフトレシピを取得
+            // Get the craft recipe to create the item
+            foreach (var itemId in MasterHolder.ItemMaster.GetItemAllIds())
+            {
+                var resultCraftRecipes = MasterHolder.CraftRecipeMaster.GetResultItemCraftRecipes(itemId).ToList();
+                
+                // そのアイテムを作成するための機械のレシピを機械ごとに作成
+                // Create a machine recipe for each machine to create the item
+                var resultMachineRecipes = new Dictionary<BlockId, List<MachineRecipeMasterElement>>();
+                if (machineRecipeDictionary.TryGetValue(itemId, out var machineRecipesList))
+                {
+                    foreach (var machineRecipe in machineRecipesList)
+                    {
+                        var blockId = MasterHolder.BlockMaster.GetBlockId(machineRecipe.BlockGuid);
+                        if (resultMachineRecipes.ContainsKey(blockId))
+                        {
+                            resultMachineRecipes[blockId].Add(machineRecipe);
+                        }
+                        else
+                        {
+                            resultMachineRecipes.Add(blockId, new List<MachineRecipeMasterElement> { machineRecipe });
+                        }
+                    }
+                }
+                
+                _recipeViewerElements.Add(itemId, new RecipeViewerItemRecipes(resultCraftRecipes, resultMachineRecipes, itemId));
+            }
+            
+            // レシピが存在しないアイテムを除外する
+            // Exclude items with no recipes
+            var removeList = new List<ItemId>();
+            foreach (var kv in _recipeViewerElements)
+            {
+                var itemId = kv.Key;
+                var recipe = kv.Value;
+                
+                if (recipe.CraftRecipes.Count == 0 && recipe.MachineRecipes.Count == 0)
+                {
+                    removeList.Add(itemId);
+                }
+            }
+            foreach (var itemId in removeList)
+            {
+                _recipeViewerElements.Remove(itemId);
+            }
+        }
+        
+        public RecipeViewerItemRecipes GetItem(ItemId itemId)
+        {
+            return _recipeViewerElements.GetValueOrDefault(itemId);
+        }
+    }
+    
+    public class RecipeViewerItemRecipes
+    {
+        public readonly ItemId ResultItemId;
+        
+        //TODO 他のmodの他のレシピにも対応できるようの柔軟性をもたせた設計を考える
+        public readonly List<CraftRecipeMasterElement> CraftRecipes;
+        public readonly Dictionary<BlockId, List<MachineRecipeMasterElement>> MachineRecipes;
+        
+        public RecipeViewerItemRecipes(List<CraftRecipeMasterElement> craftRecipes, Dictionary<BlockId, List<MachineRecipeMasterElement>> machineRecipes, ItemId resultItemId)
+        {
+            CraftRecipes = craftRecipes;
+            MachineRecipes = machineRecipes;
+            ResultItemId = resultItemId;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/GearMachineIoTest.cs
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using Core.Item.Interface;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Gear;
+using Game.Block.Blocks.Machine;
+using Game.Block.Blocks.Machine.Inventory;
 using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Gear.Common;
+using Mooresmaster.Model.BlocksModule;
+using Mooresmaster.Model.MachineRecipesModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.CombinedTest.Core
+{
+    public class GearMachineIoTest
+    {
+        public int GearMachineRecipeIndex = 3;
+        
+        //アイテムが通常通り処理されるかのテスト
+        [Test]
+        public void ItemProcessingOutputTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var recipe = MasterHolder.MachineRecipesMaster.MachineRecipes.Data[GearMachineRecipeIndex];
+            
+            var blockId = MasterHolder.BlockMaster.GetBlockId(recipe.BlockGuid);
+            var block = blockFactory.Create(blockId, new BlockInstanceId(1), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var blockInventory = block.GetComponent<VanillaMachineBlockInventoryComponent>();
+            foreach (var inputItem in recipe.InputItems)
+            {
+                blockInventory.InsertItem(itemStackFactory.Create(inputItem.ItemGuid, inputItem.Count));
+            }
+            
+            var gearEnergyTransformer = block.GetComponent<GearEnergyTransformer>();
+            var gearMachineParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.GearMachine).BlockParam as GearMachineBlockParam;
+            var machineProcessor = block.GetComponent<VanillaMachineProcessorComponent>();
+            
+            //最大クラフト時間を超過するまでクラフトする
+            var craftTime = DateTime.Now.AddSeconds(recipe.Time);
+            while (craftTime.AddSeconds(0.4).CompareTo(DateTime.Now) == 1)
+            {
+                var requiredRpm = new RPM(gearMachineParam.RequiredRpm);
+                var requiredTorque = new Torque(gearMachineParam.RequireTorque);
+                gearEnergyTransformer.SupplyPower(requiredRpm, requiredTorque, true);
+                machineProcessor.Update();
+                GameUpdater.Wait();
+                GameUpdater.UpdateDeltaTime();
+            }
+            
+            //検証
+            AssertInventory(blockInventory, recipe);
+        }
+        
+        
+        [Test]
+        // RPM、トルクが足りないときに処理に時間がかかるテスト
+        public void NotEnoughTorqueOrRpmTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var recipe = MasterHolder.MachineRecipesMaster.MachineRecipes.Data[GearMachineRecipeIndex];
+            
+            var recipeBlockId = MasterHolder.BlockMaster.GetBlockId(recipe.BlockGuid);
+            var lackRpmBlock = blockFactory.Create(recipeBlockId, new BlockInstanceId(1), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var lackTorqueBlock = blockFactory.Create(recipeBlockId, new BlockInstanceId(2), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.zero));
+            
+            var lackRpmInventory = lackRpmBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            var lackTorqueInventory = lackTorqueBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
+            
+            foreach (var inputItem in recipe.InputItems)
+            {
+                lackRpmInventory.InsertItem(itemStackFactory.Create(inputItem.ItemGuid, inputItem.Count));
+                lackTorqueInventory.InsertItem(itemStackFactory.Create(inputItem.ItemGuid, inputItem.Count));
+            }
+            
+            var lackRpmGearMachine = lackRpmBlock.GetComponent<GearEnergyTransformer>();
+            var lackTorqueGearMachine = lackTorqueBlock.GetComponent<GearEnergyTransformer>();
+            var gearMachineParam = lackRpmBlock.BlockMasterElement.BlockParam as GearMachineBlockParam;
+            
+            var lackRpmProcessor = lackRpmBlock.GetComponent<VanillaMachineProcessorComponent>();
+            var lackTorqueProcessor = lackTorqueBlock.GetComponent<VanillaMachineProcessorComponent>();
+            
+            //最大クラフト時間を超過するまでクラフトする
+            var craftTime = DateTime.Now.AddSeconds(recipe.Time * 2);
+            while (craftTime.AddSeconds(0.3).CompareTo(DateTime.Now) == 1)
+            {
+                var rpm = new RPM(gearMachineParam.RequiredRpm / 2f);
+                lackRpmGearMachine.SupplyPower(rpm, new Torque(gearMachineParam.RequireTorque), true);
+                lackTorqueGearMachine.SupplyPower(new RPM(gearMachineParam.RequiredRpm), (Torque)gearMachineParam.RequireTorque / 2f, true);
+                
+                lackRpmProcessor.Update();
+                lackTorqueProcessor.Update();
+                
+                GameUpdater.Wait();
+                GameUpdater.UpdateDeltaTime();
+            }
+            
+            //検証
+            AssertInventory(lackRpmInventory, recipe);
+            AssertInventory(lackTorqueInventory, recipe);
+        }
+        
+        private void AssertInventory(VanillaMachineBlockInventoryComponent inventory, MachineRecipeMasterElement recipe)
+        {
+            (List<IItemStack> input, List<IItemStack> output) = GetInputOutputSlot(inventory);
+            
+            Assert.AreEqual(0, input.Count);
+            foreach (var inputItem in input) Assert.AreEqual(ItemMaster.EmptyItemId, inputItem.Id);
+            
+            Assert.AreNotEqual(0, output.Count);
+            for (var i = 0; i < output.Count; i++)
+            {
+                var outputItemId = MasterHolder.ItemMaster.GetItemId(recipe.OutputItems[i].ItemGuid);
+                Assert.AreEqual(outputItemId, output[i].Id);
+                Assert.AreEqual(recipe.OutputItems[i].Count, output[i].Count);
+            }
+        }
+        
+        private (List<IItemStack>, List<IItemStack>) GetInputOutputSlot(VanillaMachineBlockInventoryComponent vanillaMachineInventory)
+        {
+            var vanillaMachineInputInventory = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(vanillaMachineInventory);
+            var vanillaMachineOutputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(vanillaMachineInventory);
+            
+            var inputSlot = vanillaMachineInputInventory.InputSlot.Where(i => i.Count != 0).ToList();
+            inputSlot.Sort((a, b) => a.Id.AsPrimitive() - b.Id.AsPrimitive());
+            
+            var outputSlot = vanillaMachineOutputInventory.OutputSlot.Where(i => i.Count != 0).ToList();
+            outputSlot.Sort((a, b) => a.Id.AsPrimitive() - b.Id.AsPrimitive());
+            
+            return (inputSlot, outputSlot);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Server.Protocol/PacketResponse/Util/CollectBeltConveyorItems.cs
+```cs
+using System.Collections.Generic;
+using Core.Master;
+using Game.Block;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Factory.BlockTemplate;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Entity.Interface;
+using Game.Entity.Interface.EntityInstance;
+using Game.World.Interface.DataStore;
 using UnityEngine;
 using static Mooresmaster.Model.BlocksModule.BlockMasterElement;
 
 
-namespace Client.Game.InGame.Context
+namespace Server.Protocol.PacketResponse.Util
 {
     /// <summary>
-    ///     Unityに表示されるブロックの実際のGameObjectを管理するクラス
-    ///     最初にブロックを生成しておき、必要なブロックを複製するためのクラス
+    ///     ベルトコンベアにあるアイテムを収集し、エンティティに変換して返す
     /// </summary>
-    public class BlockGameObjectContainer
+    public static class CollectBeltConveyorItems
     {
-        private readonly Dictionary<BlockId,BlockObjectInfo> _blockObjects;
-        private readonly BlockGameObject _missingBlockIdObject;
-        
-        public BlockGameObjectContainer(BlockGameObject missingBlockIdObject, Dictionary<BlockId,BlockObjectInfo> blockObjects)
+        public static List<IEntity> CollectItem(IEntityFactory entityFactory)
         {
-            _missingBlockIdObject = missingBlockIdObject;
-            _blockObjects = blockObjects;
+            var result = new List<IEntity>();
+            result.AddRange(CollectItemFromWorld(entityFactory));
+            
+            return result;
         }
         
-        public static async UniTask<BlockGameObjectContainer> CreateAndLoadBlockGameObjectContainer(BlockPrefabContainer blockPrefabContainer, BlockGameObject missingBlockIdObject)
-        {
-            // TODO アドレッサブルの対応
-            var blockObjectList = blockPrefabContainer.GetBlockDataList();
-            
-            return new BlockGameObjectContainer(missingBlockIdObject, blockObjectList);
-        }
         
-        public BlockGameObject CreateBlock(BlockId blockId, Vector3 position, Quaternion rotation, Transform parent, Vector3Int blockPosition, BlockDirection direction)
+        public static List<IEntity> CollectItemFromWorld(IEntityFactory entityFactory)
         {
-            if (!_blockObjects.TryGetValue(blockId, out var blockObjectInfo))
+            var result = new List<IEntity>();
+            
+            //TODO 個々のパフォーマンス問題を何とかする
+            foreach (KeyValuePair<BlockInstanceId, WorldBlockData> blockMaster in ServerContext.WorldBlockDatastore.BlockMasterDictionary)
             {
-                //ブロックIDがないのでない時用のブロックを作る
-                return CreateMissingIdBlock();
-            }
-            
-            //ブロックの作成とセットアップをして返す
-            return CreateBlockObject();
-            
-            #region Internal
-            
-            BlockGameObject CreateMissingIdBlock()
-            {
-                var missingIdBlock = Object.Instantiate(_missingBlockIdObject, position, rotation, parent);
-                var missingPosInfo = new BlockPositionInfo(blockPosition, direction, Vector3Int.one);
-                
-                //TODO nullのblock masterを入れる
-                //missingIdBlock.Initialize(blockConfig, missingPosInfo, new NullBlockStateChangeProcessor());
-                
-                return missingIdBlock.GetComponent<BlockGameObject>();
-            }
-            
-            BlockGameObject CreateBlockObject()
-            {
-                //ブロックIDは1から始まるので、オブジェクトのリストインデックスマイナス１する
-                var blockMasterElement = MasterHolder.BlockMaster.GetBlockMaster(blockId);
-                
-                //ブロックの作成とセットアップをして返す
-                var block = Object.Instantiate(blockObjectInfo.BlockObject, position, rotation, parent);
-                
-                //コンポーネントの設定
-                var blockObj = block.AddComponent<BlockGameObject>();
-                //子要素のコンポーネントの設定
-                foreach (var mesh in blockObj.GetComponentsInChildren<MeshRenderer>())
+                var block = blockMaster.Value.Block;
+                var pos = blockMaster.Value.BlockPositionInfo.OriginalPos;
+                // TODO 重かったら考える
+                if (!block.TryGetComponent<IItemCollectableBeltConveyor>(out var component))
                 {
-                    mesh.gameObject.AddComponent<BlockGameObjectChild>();
-                    mesh.gameObject.AddComponent<MeshCollider>();
+                    continue;
                 }
                 
-                blockObj.gameObject.SetActive(true);
-                var posInfo = new BlockPositionInfo(blockPosition, direction, blockMasterElement.BlockSize);
-                var blockType = blockMasterElement.BlockType;
-                blockObj.Initialize(blockMasterElement, posInfo, GetBlockStateChangeProcessor(blockObj, blockType));
+                var direction = ServerContext.WorldBlockDatastore.GetBlockDirection(pos);
+                result.AddRange(CollectItemFromBeltConveyor(entityFactory, component, pos, direction));
+            }
+            
+            return result;
+        }
+        
+        private static List<IEntity> CollectItemFromBeltConveyor(IEntityFactory entityFactory, IItemCollectableBeltConveyor beltConveyor, Vector3Int pos, BlockDirection blockDirection)
+        {
+            var result = new List<IEntity>();
+            for (var i = 0; i < beltConveyor.BeltConveyorItems.Count; i++)
+            {
+                var beltConveyorItem = beltConveyor.BeltConveyorItems[i];
+                if (beltConveyorItem == null) continue;
                 
-                //ブロックが開けるものの場合はそのコンポーネントを付与する
-                if (IsOpenableInventory(blockType)) block.gameObject.AddComponent<OpenableInventoryBlock>();
-                return block.GetComponent<BlockGameObject>();
-            }
-            
-            #endregion
-        }
-        
-        public BlockPreviewObject CreatePreviewBlock(BlockId blockId)
-        {
-            if (!_blockObjects.TryGetValue(blockId, out var blockObjectInfo))
-            {
-                var blockMasterElement = MasterHolder.BlockMaster.GetBlockMaster(blockId);
-                throw new System.Exception($"ブロックの登録がありません。Name:{blockMasterElement.Name} GUID:{blockMasterElement.BlockGuid}");
-            }
-            
-            //ブロックの作成とセットアップをして返す
-            var block = Object.Instantiate(blockObjectInfo.BlockObject, Vector3.zero, Quaternion.identity);
-            block.SetActive(true);
-            
-            var previewGameObject = block.AddComponent<BlockPreviewObject>();
-            previewGameObject.SetTriggerCollider(true);
-            previewGameObject.Initialize(blockId);
-            
-            return previewGameObject;
-        }
-        
-        /// <summary>
-        ///     todo ブロックコンフィグのロードのdynamicを辞める時に一緒にこれに対応したシステムを構築する
-        /// </summary>
-        /// <param name="type"></param>
-        /// <returns></returns>
-        private bool IsOpenableInventory(string type)
-        {
-            return type is
-                BlockTypeConst.Chest or
-                BlockTypeConst.ElectricGenerator or
-                BlockTypeConst.ElectricMiner or
-                BlockTypeConst.ElectricMachine or
-                BlockTypeConst.GearMachine or
-                BlockTypeConst.GearMiner;
-        }
-        
-        /// <summary>
-        ///     どのブロックステートプロセッサーを使うかを決める
-        /// </summary>
-        private IBlockStateChangeProcessor GetBlockStateChangeProcessor(BlockGameObject block, string blockType)
-        {
-            if (block.TryGetComponent<IBlockStateChangeProcessor>(out var stateChangeProcessor)) return stateChangeProcessor;
-            
-            return blockType switch
-            {
-                BlockTypeConst.ElectricMiner => block.gameObject.AddComponent<MachineBlockStateChangeProcessor>(),
-                _ => new NullBlockStateChangeProcessor(),
-            };
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Server.Event/EventReceive/RemoveBlockEventPacket.cs
-```cs
-using System;
-using Game.Context;
-using Game.World.Interface.DataStore;
-using MessagePack;
-using Server.Util.MessagePack;
-using UniRx;
-using UnityEngine;
-
-namespace Server.Event.EventReceive
-{
-    public class RemoveBlockToSetEventPacket
-    {
-        public const string EventTag = "va:event:removeBlock";
-        private readonly EventProtocolProvider _eventProtocolProvider;
-        
-        public RemoveBlockToSetEventPacket(EventProtocolProvider eventProtocolProvider)
-        {
-            _eventProtocolProvider = eventProtocolProvider;
-            ServerContext.WorldBlockUpdateEvent.OnBlockRemoveEvent.Subscribe(OnBlockRemove);
-        }
-        
-        private void OnBlockRemove(BlockUpdateProperties updateProperties)
-        {
-            var pos = updateProperties.Pos;
-            var payload = MessagePackSerializer.Serialize(new RemoveBlockEventMessagePack(pos));
-            
-            _eventProtocolProvider.AddBroadcastEvent(EventTag, payload);
-        }
-    }
-    
-    [MessagePackObject]
-    public class RemoveBlockEventMessagePack
-    {
-        [Obsolete("デシリアライズ用のコンストラクタです。基本的に使用しないでください。")]
-        public RemoveBlockEventMessagePack()
-        {
-        }
-        
-        public RemoveBlockEventMessagePack(Vector3Int pos)
-        {
-            Position = new Vector3IntMessagePack(pos);
-        }
-        
-        [Key(0)] public Vector3IntMessagePack Position { get; set; }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/VanillaMachineSaveComponent.cs
-```cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Core.Item.Interface;
-using Game.Block.Blocks.Machine.Inventory;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Newtonsoft.Json;
-
-namespace Game.Block.Blocks.Machine
-{
-    public class VanillaMachineSaveComponent : IBlockSaveState
-    {
-        private readonly VanillaMachineInputInventory _vanillaMachineInputInventory;
-        private readonly VanillaMachineOutputInventory _vanillaMachineOutputInventory;
-        private readonly VanillaMachineProcessorComponent _vanillaMachineProcessorComponent;
-        
-        public VanillaMachineSaveComponent(
-            VanillaMachineInputInventory vanillaMachineInputInventory,
-            VanillaMachineOutputInventory vanillaMachineOutputInventory,
-            VanillaMachineProcessorComponent vanillaMachineProcessorComponent)
-        {
-            _vanillaMachineInputInventory = vanillaMachineInputInventory;
-            _vanillaMachineOutputInventory = vanillaMachineOutputInventory;
-            _vanillaMachineProcessorComponent = vanillaMachineProcessorComponent;
-        }
-        public bool IsDestroy { get; private set; }
-        
-        public void Destroy()
-        {
-            IsDestroy = true;
-        }
-        
-        public string GetSaveState()
-        {
-            BlockException.CheckDestroy(this);
-            
-            // JsonObjectにリファクタ
-            var jsonObject = new VanillaMachineJsonObject
-            {
-                InputSlot = _vanillaMachineInputInventory.InputSlot.Select(item => new ItemStackSaveJsonObject(item)).ToList(),
-                OutputSlot = _vanillaMachineOutputInventory.OutputSlot.Select(item => new ItemStackSaveJsonObject(item)).ToList(),
-                State = (int)_vanillaMachineProcessorComponent.CurrentState,
-                RemainingTime = _vanillaMachineProcessorComponent.RemainingSecond,
-                RecipeGuidStr = _vanillaMachineProcessorComponent.RecipeGuid.ToString(),
-            };
-            
-            return JsonConvert.SerializeObject(jsonObject);
-        }
-    }
-    
-    public class VanillaMachineJsonObject
-    {
-        [JsonProperty("inputSlot")]
-        public List<ItemStackSaveJsonObject> InputSlot;
-        [JsonProperty("outputSlot")]
-        public List<ItemStackSaveJsonObject> OutputSlot;
-        [JsonProperty("recipeGuid")]
-        public string RecipeGuidStr;
-        [JsonIgnore]
-        public Guid RecipeGuid => Guid.Parse(RecipeGuidStr);
-        
-        [JsonProperty("remainingTime")]
-        public double RemainingTime;
-        
-        [JsonProperty("state")]
-        public int State;
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/BlockSystem/BlockStateEventHandler.cs
-```cs
-using Client.Game.InGame.Block;
-using Client.Game.InGame.Context;
-using Client.Network.API;
-using MessagePack;
-using Server.Event.EventReceive;
-using UnityEngine;
-using VContainer.Unity;
-
-namespace Client.Game.InGame.BlockSystem
-{
-    public class BlockStateEventHandler : IPostStartable
-    {
-        private readonly BlockGameObjectDataStore _blockGameObjectDataStore;
-        private readonly InitialHandshakeResponse _initialHandshakeResponse;
-        
-        public BlockStateEventHandler(BlockGameObjectDataStore blockGameObjectDataStore, InitialHandshakeResponse initialHandshakeResponse)
-        {
-            _blockGameObjectDataStore = blockGameObjectDataStore;
-            _initialHandshakeResponse = initialHandshakeResponse;
-            
-            ClientContext.VanillaApi.Event.RegisterEventResponse(ChangeBlockStateEventPacket.EventTag,
-                payload =>
+                //残り時間をどこまで進んだかに変換するために 1- する
+                var percent = 1f - (float)beltConveyorItem.RemainingPercent;
+                float entityX = pos.x;
+                float entityZ = pos.z;
+                switch (blockDirection)
                 {
-                    var data = MessagePackSerializer.Deserialize<ChangeBlockStateMessagePack>(payload);
-                    ChangeState(data);
-                });
-        }
-        
-        public void PostStart()
-        {
-            foreach (var state in _initialHandshakeResponse.BlockStates) ChangeState(state);
-        }
-        
-        private void ChangeState(ChangeBlockStateMessagePack state)
-        {
-            var pos = state.Position;
-            if (!_blockGameObjectDataStore.BlockGameObjectDictionary.TryGetValue(pos, out var _))
-            {
-                Debug.Log("ブロックがない : " + pos);
-            }
-            else
-            {
-                var blockObject = _blockGameObjectDataStore.BlockGameObjectDictionary[pos];
-                blockObject.BlockStateChangeProcessor.OnChangeState(state.CurrentState, state.PreviousState, state.CurrentStateData);
-            }
-        }
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Block/BlockGameObjectDataStore.cs
-```cs
-using System;
-using System.Collections.Generic;
-using Client.Game.InGame.BlockSystem;
-using Client.Game.InGame.Context;
-using Core.Master;
-using Cysharp.Threading.Tasks;
-using Game.Block.Interface;
-using Game.Block.Interface.Extension;
-using UnityEngine;
-
-namespace Client.Game.InGame.Block
-{
-    public class BlockGameObjectDataStore : MonoBehaviour
-    {
-        private readonly Dictionary<Vector3Int, BlockGameObject> _blockObjectsDictionary = new();
-        
-        public IReadOnlyDictionary<Vector3Int, BlockGameObject> BlockGameObjectDictionary => _blockObjectsDictionary;
-        
-        public event Action<BlockGameObject> OnPlaceBlock;
-        
-        
-        public BlockGameObject GetBlockGameObject(Vector3Int position)
-        {
-            return _blockObjectsDictionary.TryGetValue(position, out var value) ? value : null;
-        }
-        
-        public bool ContainsBlockGameObject(Vector3Int position)
-        {
-            return _blockObjectsDictionary.ContainsKey(position);
-        }
-        
-        
-        public void PlaceBlock(Vector3Int blockPosition, BlockId blockId, BlockDirection blockDirection)
-        {
-            //すでにブロックがあり、IDが違う場合は新しいブロックに置き換えるために削除する
-            if (_blockObjectsDictionary.ContainsKey(blockPosition))
-            {
-                //IDが同じ時は再設置の必要がないため処理を終了
-                if (_blockObjectsDictionary[blockPosition].BlockId == blockId) return;
-                
-                //IDが違うため削除
-                Destroy(_blockObjectsDictionary[blockPosition].gameObject);
-                _blockObjectsDictionary.Remove(blockPosition);
-            }
-            
-            //新しいブロックを設置
-            var pos = SlopeBlockPlaceSystem.GetBlockPositionToPlacePosition(blockPosition, blockDirection, blockId);
-            var rot = blockDirection.GetRotation();
-            
-            var block = ClientContext.BlockGameObjectContainer.CreateBlock(blockId, pos, rot, transform, blockPosition, blockDirection);
-            //設置アニメーションを再生
-            block.PlayPlaceAnimation().Forget();
-            
-            _blockObjectsDictionary.Add(blockPosition, block);
-            OnPlaceBlock?.Invoke(block);
-        }
-        
-        public void RemoveBlock(Vector3Int blockPosition)
-        {
-            //すでにブロックが置かれている時のみブロックを削除する
-            if (!_blockObjectsDictionary.ContainsKey(blockPosition)) return;
-            
-            _blockObjectsDictionary[blockPosition].DestroyBlock().Forget();
-            _blockObjectsDictionary.Remove(blockPosition);
-        }
-        
-        public bool IsOverlapPositionInfo(BlockPositionInfo target)
-        {
-            foreach (var block in _blockObjectsDictionary.Values)
-                if (block.BlockPosInfo.IsOverlap(target))
-                    return true;
-            return false;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/VanillaElectricMachineComponent.cs
-```cs
-using Game.Block.Interface;
-using Game.EnergySystem;
-
-namespace Game.Block.Blocks.Machine
-{
-    /// <summary>
-    ///     機械を表すクラス
-    /// </summary>
-    public class VanillaElectricMachineComponent : IElectricConsumer
-    {
-        private readonly VanillaMachineProcessorComponent _vanillaMachineProcessorComponent;
-        
-        public VanillaElectricMachineComponent(BlockInstanceId blockInstanceId, VanillaMachineProcessorComponent vanillaMachineProcessorComponent)
-        {
-            _vanillaMachineProcessorComponent = vanillaMachineProcessorComponent;
-            BlockInstanceId = blockInstanceId;
-        }
-        public BlockInstanceId BlockInstanceId { get; }
-        
-        public bool IsDestroy { get; private set; }
-        
-        public void Destroy()
-        {
-            IsDestroy = true;
-        }
-        
-        #region IBlockElectric implementation
-        
-        public ElectricPower RequestEnergy => _vanillaMachineProcessorComponent.RequestPower;
-        
-        public void SupplyEnergy(ElectricPower power)
-        {
-            BlockException.CheckDestroy(this);
-            
-            _vanillaMachineProcessorComponent.SupplyPower(power);
-        }
-        
-        #endregion
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Miner/VanillaGearMinerComponent.cs
-```cs
-using Game.Block.Blocks.Gear;
-using Game.Block.Interface.Component;
-using Game.Gear.Common;
-using Mooresmaster.Model.BlocksModule;
-using Mooresmaster.Model.MineSettingsModule;
-using UniRx;
-
-namespace Game.Block.Blocks.Miner
-{
-    public class VanillaGearMinerComponent : IBlockComponent
-    {
-        private readonly GearEnergyTransformer _gearEnergyTransformer;
-        private readonly VanillaMinerProcessorComponent _vanillaMinerProcessorComponent;
-        private readonly GearMinerBlockParam _gearMinerBlockParam;
-        
-        public VanillaGearMinerComponent(VanillaMinerProcessorComponent vanillaMinerProcessorComponent, GearEnergyTransformer gearEnergyTransformer, GearMinerBlockParam gearMinerBlockParam)
-        {
-            _gearMinerBlockParam = gearMinerBlockParam;
-            _vanillaMinerProcessorComponent = vanillaMinerProcessorComponent;
-            _gearEnergyTransformer = gearEnergyTransformer;
-            _gearEnergyTransformer.OnGearUpdate.Subscribe(OnGearUpdate);
-        }
-        
-        private void OnGearUpdate(GearUpdateType gearUpdateType)
-        {
-            var requiredRpm = new RPM(_gearMinerBlockParam.RequiredRpm);
-            var requireTorque = new Torque(_gearMinerBlockParam.RequireTorque);
-            
-            var currentElectricPower = _gearEnergyTransformer.CalcMachineSupplyPower(requiredRpm, requireTorque);
-            _vanillaMinerProcessorComponent.SupplyPower(currentElectricPower);
-        }
-        
-        public bool IsDestroy { get; private set; }
-        public void Destroy()
-        {
-            IsDestroy = true;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.World.Interface/DataStore/IWorldBlockUpdateEvent.cs
-```cs
-using System;
-using UnityEngine;
-
-namespace Game.World.Interface.DataStore
-{
-    public interface IWorldBlockUpdateEvent
-    {
-        public IObservable<BlockUpdateProperties> OnBlockPlaceEvent { get; }
-        public IObservable<BlockUpdateProperties> OnBlockRemoveEvent { get; }
-        
-        /// <summary>
-        ///     特定の座標にブロックが置かれた時のイベントを購読する
-        /// </summary>
-        public IDisposable SubscribePlace(Vector3Int subscribePos, Action<BlockUpdateProperties> blockPlaceEvent);
-        
-        /// <summary>
-        ///     特定の座標にブロックが削除された時のイベントを購読する
-        /// </summary>
-        public IDisposable SubscribeRemove(Vector3Int subscribePos, Action<BlockUpdateProperties> blockPlaceEvent);
-    }
-    
-    public class BlockUpdateProperties
-    {
-        public Vector3Int Pos { get; }
-        public WorldBlockData BlockData { get; }
-        
-        public BlockUpdateProperties(Vector3Int pos, WorldBlockData blockData)
-        {
-            Pos = pos;
-            BlockData = blockData;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IUpdatableBlockComponent.cs
-```cs
-namespace Game.Block.Interface.Component
-{
-    public interface IUpdatableBlockComponent : IBlockComponent
-    {
-        public void Update();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Component/BlockConnectorComponent.cs
-```cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Block.Interface.ComponentAttribute;
-using Game.Context;
-using Game.World.Interface.DataStore;
-using Mooresmaster.Model.BlockConnectInfoModule;
-using UnityEngine;
-
-namespace Game.Block.Component
-{
-    [DisallowMultiple]
-    public class BlockConnectorComponent<TTarget> : IBlockConnectorComponent<TTarget> where TTarget : IBlockComponent
-    {
-        public IReadOnlyDictionary<TTarget, (IConnectOption selfOption, IConnectOption targetOption)> ConnectedTargets => _connectedTargets;
-        private readonly Dictionary<TTarget, (IConnectOption selfOption, IConnectOption targetOption)> _connectedTargets = new();
-        
-        private readonly List<IDisposable> _blockUpdateEvents = new();
-        
-        private readonly Dictionary<Vector3Int, List<(Vector3Int position, IConnectOption targetOption)>> _inputConnectPoss = new(); // key インプットコネクターの位置 value そのコネクターと接続できる位置
-        private readonly Dictionary<Vector3Int, (Vector3Int position, IConnectOption selfOption)> _outputTargetToOutputConnector = new(); // key アウトプット先の位置 value そのアウトプット先と接続するアウトプットコネクターの位置
-        
-        private readonly BlockPositionInfo _blockPositionInfo;
-        
-        public BlockConnectorComponent(BlockConnectInfo inputConnectInfo, BlockConnectInfo outputConnectInfo, BlockPositionInfo blockPositionInfo)
-        {
-            _blockPositionInfo = blockPositionInfo;
-            var blockPos = blockPositionInfo.OriginalPos;
-            var blockDirection = blockPositionInfo.BlockDirection;
-            var worldBlockUpdateEvent = ServerContext.WorldBlockUpdateEvent;
-            
-            CreateInputConnectPoss();
-            CreateOutputTargetToOutputConnector();
-            
-            foreach (var outputPos in _outputTargetToOutputConnector.Keys)
-            {
-                _blockUpdateEvents.Add(worldBlockUpdateEvent.SubscribePlace(outputPos, b => OnPlaceBlock(b.Pos)));
-                _blockUpdateEvents.Add(worldBlockUpdateEvent.SubscribeRemove(outputPos, OnRemoveBlock));
-                
-                //アウトプット先にブロックがあったら接続を試みる
-                if (ServerContext.WorldBlockDatastore.Exists(outputPos)) OnPlaceBlock(outputPos);
-            }
-            
-            #region Internal
-            
-            void CreateInputConnectPoss()
-            {
-                if (inputConnectInfo == null) return;
-                foreach (var inputConnectSetting in inputConnectInfo.items)
-                {
-                    var blockPosConvertAction = blockDirection.GetCoordinateConvertAction();
-                    
-                    var inputConnectorPos = blockPos + blockPosConvertAction(inputConnectSetting.Offset);
-                    var directions = inputConnectSetting.Directions;
-                    if (directions == null)
-                    {
-                        _inputConnectPoss.Add(inputConnectorPos, null);
-                        continue;
-                    }
-                    
-                    var targetPositions = directions.Select(c => (blockPosConvertAction(c) + inputConnectorPos, inputConnectSetting.ConnectOption)).ToList();
-                    if (!_inputConnectPoss.TryAdd(inputConnectorPos, targetPositions)) _inputConnectPoss[inputConnectorPos] = _inputConnectPoss[inputConnectorPos].Concat(targetPositions).ToList();
-                }
-            }
-            
-            void CreateOutputTargetToOutputConnector()
-            {
-                if (outputConnectInfo == null) return;
-                
-                foreach (var connectSetting in outputConnectInfo.items)
-                {
-                    var blockPosConvertAction = blockDirection.GetCoordinateConvertAction();
-                    
-                    var outputConnectorPos = blockPos + blockPosConvertAction(connectSetting.Offset);
-                    var directions = connectSetting.Directions;
-                    var targetPoss = directions.Select(c => blockPosConvertAction(c) + outputConnectorPos).ToList();
-                    
-                    foreach (var targetPos in targetPoss) _outputTargetToOutputConnector.Add(targetPos, (outputConnectorPos, connectSetting.ConnectOption));
-                }
-            }
-            
-            #endregion
-        }
-        
-        public bool IsDestroy { get; private set; }
-        
-        public void Destroy()
-        {
-            _connectedTargets.Clear();
-            _blockUpdateEvents.ForEach(x => x.Dispose());
-            _blockUpdateEvents.Clear();
-            IsDestroy = true;
-        }
-        
-        /// <summary>
-        ///     ブロックを接続元から接続先に接続できるなら接続する
-        ///     その場所にブロックがあるか、
-        ///     それぞれインプットとアウトプットの向きはあっているかを確認し、接続する TODO ここのドキュメントを書く
-        /// </summary>
-        private void OnPlaceBlock(Vector3Int outputTargetPos)
-        {
-            //接続先にBlockInventoryがなければ処理を終了
-            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
-            if (!worldBlockDatastore.TryGetBlock(outputTargetPos, out BlockConnectorComponent<TTarget> targetConnector)) return;
-            if (!worldBlockDatastore.TryGetBlock<TTarget>(outputTargetPos, out var targetComponent)) return;
-            
-            // アウトプット先にターゲットのインプットオブジェクトがあるかどうかをチェックする
-            var isConnect = false;
-            IConnectOption selfOption = null;
-            IConnectOption targetOption = null;
-            foreach (var targetInput in targetConnector._inputConnectPoss)
-            {
-                // アウトプット先に、インプットのコネクターがあるかどうかをチェックする
-                if (targetInput.Key != outputTargetPos) continue;
-                
-                // インプットがどこからでも接続できるならそのまま接続
-                if (targetInput.Value == null)
-                {
-                    isConnect = true;
-                    break;
-                }
-                
-                // インプット先に制限がある場合、その座標にアウトプットのコネクターがあるかをチェックする
-                var outputConnector = _outputTargetToOutputConnector[outputTargetPos];
-                
-                // インプット先にアウトプットのコネクターがある場合は接続できる
-                foreach (var target in targetInput.Value)
-                    if (target.position == outputConnector.position)
-                    {
-                        isConnect = true;
-                        selfOption = outputConnector.selfOption;
-                        targetOption = target.targetOption;
+                    case BlockDirection.North:
+                        entityX += 0.5f; //ベルトコンベアの基準座標は中心なので0.5を他してアイテムを中心に持ってくる
+                        entityZ += percent;
                         break;
-                    }
+                    case BlockDirection.South:
+                        entityX += 0.5f;
+                        entityZ += 1 - percent; //北とは逆向きなので1を引いて逆向きにする
+                        break;
+                    case BlockDirection.East:
+                        entityX += percent;
+                        entityZ += 0.5f;
+                        break;
+                    case BlockDirection.West:
+                        entityX += 1 - percent;
+                        entityZ += 0.5f;
+                        break;
+                }
+                
+                //この0.3という値は仮
+                var y = pos.y + VanillaBeltConveyorComponent.DefaultBeltConveyorHeight;
+                
+                if (beltConveyor.SlopeType == BeltConveyorSlopeType.Up)
+                {
+                    y += percent;
+                    y += 0.1f;
+                }
+                else if (beltConveyor.SlopeType == BeltConveyorSlopeType.Down)
+                {
+                    y -= percent;
+                    y += 0.1f;
+                    y++;
+                }
+                
+                var position = new Vector3(entityX, y, entityZ);
+                var itemEntity = (ItemEntity)entityFactory.CreateEntity(VanillaEntityType.VanillaItem, new EntityInstanceId(beltConveyorItem.ItemInstanceId.AsPrimitive()), position);
+                itemEntity.SetState(beltConveyorItem.ItemId, 1);
+                
+                result.Add(itemEntity);
             }
             
-            if (!isConnect) return;
-            
-            //接続元ブロックと接続先ブロックを接続
-            if (!_connectedTargets.ContainsKey(targetComponent)) _connectedTargets.Add(targetComponent, (selfOption, targetOption));
-        }
-        
-        private void OnRemoveBlock(BlockUpdateProperties updateProperties)
-        {
-            //削除されたブロックがInputConnectorComponentでない場合、処理を終了する
-            if (!ServerContext.WorldBlockDatastore.TryGetBlock<TTarget>(updateProperties.Pos, out var component)) return;
-            
-            _connectedTargets.Remove(component);
+            return result;
         }
     }
 }
 ```
 
-moorestech_client/Assets/Scripts/Client.Game/InGame/BlockSystem/OpenableInventoryBlock.cs
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/ChestLogicTest.cs
 ```cs
-using UnityEngine;
-
-namespace Client.Game.InGame.BlockSystem
-{
-    //todo これをオミットしてIDからチェックできるようにする
-    public class OpenableInventoryBlock : MonoBehaviour
-    {
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Block/GroundCollisionDetector.cs
-```cs
-using Client.Game.InGame.BlockSystem;
-using UnityEngine;
-
-namespace Client.Game.InGame.Block
-{
-    public class GroundCollisionDetector : MonoBehaviour
-    {
-        public bool IsCollision { get; private set; }
-        
-        private void FixedUpdate()
-        {
-            // なぜかExitが呼ばれないのでこの方法でリセットを行う
-            IsCollision = false;
-        }
-        
-        private void OnTriggerStay(Collider other)
-        {
-            if (other.gameObject.TryGetComponent<GroundGameObject>(out _))
-            {
-                IsCollision = true;
-            }
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Miner/VanillaMinerProcessorComponent.cs
-```cs
-using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using Core.Inventory;
-using Core.Item.Interface;
 using Core.Master;
-using Game.Block.Blocks.Service;
-using Game.Block.Blocks.Util;
+using Core.Update;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Blocks.Chest;
 using Game.Block.Component;
-using Game.Block.Event;
 using Game.Block.Interface;
 using Game.Block.Interface.Component;
-using Game.Block.Interface.Event;
-using Game.Block.Interface.State;
+using Game.Block.Interface.Extension;
 using Game.Context;
-using Game.EnergySystem;
-using Game.Map.Interface.Vein;
-using MessagePack;
-using Mooresmaster.Model.MineSettingsModule;
-using Newtonsoft.Json;
-using UniRx;
+using Mooresmaster.Model.BlockConnectInfoModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+using Random = System.Random;
 
-namespace Game.Block.Blocks.Miner
+namespace Tests.CombinedTest.Core
 {
-    public class VanillaMinerProcessorComponent : IBlockInventory, IOpenableInventory, IBlockSaveState, IBlockStateChange, IUpdatableBlockComponent
+    public class ChestLogicTest
     {
-        public bool IsDestroy { get; private set; }
-        public ElectricPower RequestEnergy { get; }
-        public IObservable<BlockState> OnChangeBlockState => _blockStateChangeSubject;
-        private Subject<BlockState> _blockStateChangeSubject = new();
-        
-        private readonly MineSettings _mineSettings;
-        private readonly BlockOpenableInventoryUpdateEvent _blockInventoryUpdate;
-        private readonly ConnectingInventoryListPriorityInsertItemService _connectInventoryService;
-        private readonly List<IItemStack> _miningItems = new();
-        
-        private readonly OpenableInventoryItemDataStoreService _openableInventoryItemDataStoreService;
-        private readonly BlockInstanceId _blockInstanceId;
-        
-        private ElectricPower _currentPower;
-        
-        private float _defaultMiningTime = float.MaxValue;
-        private double _remainingSecond = double.MaxValue;
-        
-        private VanillaMinerState _lastMinerState;
-        private VanillaMinerState _currentState = VanillaMinerState.Idle;
-        
-        public VanillaMinerProcessorComponent(BlockInstanceId blockInstanceId, ElectricPower requestPower, int outputSlotCount, BlockOpenableInventoryUpdateEvent openableInventoryUpdateEvent, BlockConnectorComponent<IBlockInventory> inputConnectorComponent, BlockPositionInfo blockPositionInfo, MineSettings mineSettings)
+        //ベルトコンベアからアイテムを搬入する
+        [Test]
+        public void BeltConveyorInsertChestLogicTest()
         {
-            _mineSettings = mineSettings;
-            _blockInstanceId = blockInstanceId;
-            RequestEnergy = requestPower;
-            
-            _blockInventoryUpdate = openableInventoryUpdateEvent;
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
             
             var itemStackFactory = ServerContext.ItemStackFactory;
-            _openableInventoryItemDataStoreService = new OpenableInventoryItemDataStoreService(InvokeEvent, itemStackFactory, outputSlotCount);
-            _connectInventoryService = new ConnectingInventoryListPriorityInsertItemService(inputConnectorComponent);
+            var blockFactory = ServerContext.BlockFactory;
             
-            SetMiningItem();
+            var random = new Random(4123);
             
-            #region Internal
+            var id = new ItemId(random.Next(1, 11));
+            var count = 1;
+            var item = itemStackFactory.Create(id, count);
             
-            void SetMiningItem()
+            var chest = blockFactory.Create(ForUnitTestModBlockId.ChestId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var chestComponent = chest.GetComponent<VanillaChestComponent>();
+            
+            var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            beltConveyorComponent.InsertItem(item);
+            
+            var beltConnectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            beltConnectInventory.Add(chestComponent, (null, null));
+            
+            
+            while (!chestComponent.GetItem(0).Equals(item)) GameUpdater.UpdateWithWait();
+            
+            Assert.True(chestComponent.GetItem(0).Equals(item));
+        }
+        
+        [Test]
+        public void BeltConveyorOutputChestLogicTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var chest = blockFactory.Create(ForUnitTestModBlockId.ChestId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var chestComponent = chest.GetComponent<VanillaChestComponent>();
+            
+            var beltconveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var beltConveyorComponent = beltconveyor.GetComponent<VanillaBeltConveyorComponent>();
+            
+            chestComponent.SetItem(0, new ItemId(1), 1);
+            
+            var chestConnectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)chest.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            chestConnectInventory.Add(beltConveyorComponent, (null, null));
+            GameUpdater.UpdateWithWait();
+            
+            
+            Assert.AreEqual(chestComponent.GetItem(0).Count, 0);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block/Blocks/BeltConveyor/VanillaBeltConveyorComponent.cs
+```cs
+using System.Collections.Generic;
+using System.Linq;
+using Core.Item.Interface;
+using Core.Master;
+using Core.Update;
+using Game.Block.Component;
+using Game.Block.Factory.BlockTemplate;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Context;
+using Newtonsoft.Json;
+
+namespace Game.Block.Blocks.BeltConveyor
+{
+    /// <summary>
+    ///     アイテムの搬出入とインベントリの管理を行う
+    /// </summary>
+    public class VanillaBeltConveyorComponent : IBlockInventory, IBlockSaveState, IItemCollectableBeltConveyor, IUpdatableBlockComponent
+    {
+        public const float DefaultBeltConveyorHeight = 0.3f;
+        
+        public int InventoryItemNum { get; }
+        public bool IsDestroy { get; private set; }
+        
+        public BeltConveyorSlopeType SlopeType { get; }
+        public IReadOnlyList<IOnBeltConveyorItem> BeltConveyorItems => _inventoryItems;
+        private readonly BeltConveyorInventoryItem[] _inventoryItems;
+        
+        private readonly BlockConnectorComponent<IBlockInventory> _blockConnectorComponent;
+        private readonly string _blockName;
+        private double _timeOfItemEnterToExit; //ベルトコンベアにアイテムが入って出るまでの時間
+        
+        public VanillaBeltConveyorComponent(int inventoryItemNum, float timeOfItemEnterToExit, BlockConnectorComponent<IBlockInventory> blockConnectorComponent, string blockName, BeltConveyorSlopeType slopeType)
+        {
+            _blockName = blockName;
+            SlopeType = slopeType;
+            InventoryItemNum = inventoryItemNum;
+            _timeOfItemEnterToExit = timeOfItemEnterToExit;
+            _blockConnectorComponent = blockConnectorComponent;
+            
+            _inventoryItems = new BeltConveyorInventoryItem[inventoryItemNum];
+        }
+        
+        public VanillaBeltConveyorComponent(string state, int inventoryItemNum, float timeOfItemEnterToExit, BlockConnectorComponent<IBlockInventory> blockConnectorComponent, string blockName, BeltConveyorSlopeType slopeType) :
+            this(inventoryItemNum, timeOfItemEnterToExit, blockConnectorComponent, blockName, slopeType)
+        {
+            //stateから復元
+            //データがないときは何もしない
+            if (state == string.Empty) return;
+            
+            List<BeltConveyorItemJsonObject> items = JsonConvert.DeserializeObject<List<BeltConveyorItemJsonObject>>(state);
+            for (var i = 0; i < items.Count; i++)
             {
-                List<IMapVein> veins = ServerContext.MapVeinDatastore.GetOverVeins(blockPositionInfo.OriginalPos);
-                foreach (var vein in veins) _miningItems.Add(itemStackFactory.Create(vein.VeinItemId, 1));
-                if (veins.Count == 0) return;
+                if (items[i].ItemStack == null) continue;
                 
-                foreach (var miningSetting in _mineSettings.items)
-                {
-                    var itemId = MasterHolder.ItemMaster.GetItemId(miningSetting.ItemGuid);
-                    if (itemId != veins[0].VeinItemId) continue;
-                    _defaultMiningTime = miningSetting.Time;
-                    _remainingSecond = _defaultMiningTime;
-                    break;
-                }
+                var itemStack = items[i].ItemStack.ToItemStack();
+                _inventoryItems[i] = new BeltConveyorInventoryItem(itemStack.Id, itemStack.ItemInstanceId);
+                _inventoryItems[i].RemainingPercent = items[i].RemainingPercent;
             }
-            
-            #endregion
-        }
-        
-        public VanillaMinerProcessorComponent(string saveData, BlockInstanceId blockInstanceId, ElectricPower requestPower, int outputSlotCount, BlockOpenableInventoryUpdateEvent openableInventoryUpdateEvent, BlockConnectorComponent<IBlockInventory> inputConnectorComponent, BlockPositionInfo blockPositionInfo, MineSettings mineSettings)
-            : this(blockInstanceId, requestPower, outputSlotCount, openableInventoryUpdateEvent, inputConnectorComponent, blockPositionInfo, mineSettings)
-        {
-            var saveJsonObject = JsonConvert.DeserializeObject<VanillaElectricMinerSaveJsonObject>(saveData);
-            for (var i = 0; i < saveJsonObject.Items.Count; i++)
-            {
-                var itemStack = saveJsonObject.Items[i].ToItemStack();
-                _openableInventoryItemDataStoreService.SetItem(i, itemStack);
-            }
-            
-            _remainingSecond = saveJsonObject.RemainingSecond;
-        }
-        
-        public void SupplyPower(ElectricPower power)
-        {
-            BlockException.CheckDestroy(this);
-            
-            _currentPower = power;
-        }
-        
-        public string GetSaveState()
-        {
-            BlockException.CheckDestroy(this);
-            
-            var saveData = new VanillaElectricMinerSaveJsonObject
-            {
-                RemainingSecond = _remainingSecond,
-                Items = _openableInventoryItemDataStoreService.InventoryItems.Select(item => new ItemStackSaveJsonObject(item)).ToList(),
-            };
-            
-            return JsonConvert.SerializeObject(saveData);
-        }
-        
-        
-        public void Update()
-        {
-            BlockException.CheckDestroy(this);
-            
-            MinerProgressUpdate();
-            CheckStateAndInvokeEventUpdate();
-            
-            #region Internal
-            
-            void MinerProgressUpdate()
-            {
-                var subTime = MachineCurrentPowerToSubSecond.GetSubSecond(_currentPower, RequestEnergy);
-                if (subTime <= 0)
-                {
-                    //電力の都合で処理を進められないのでreturn
-                    _currentState = VanillaMinerState.Idle;
-                    return;
-                }
-                
-                //insertできるかチェック
-                if (!_openableInventoryItemDataStoreService.InsertionCheck(_miningItems))
-                {
-                    //挿入できないのでreturn
-                    _currentState = VanillaMinerState.Idle;
-                    return;
-                }
-                
-                _currentState = VanillaMinerState.Mining;
-                
-                _remainingSecond -= subTime;
-                
-                if (_remainingSecond <= 0)
-                {
-                    _remainingSecond = _defaultMiningTime;
-                    
-                    //空きスロットを探索し、あるならアイテムを挿入
-                    _openableInventoryItemDataStoreService.InsertItem(_miningItems);
-                }
-                
-                _currentPower = new ElectricPower(0);
-                InsertConnectInventory();
-            }
-            
-            void CheckStateAndInvokeEventUpdate()
-            {
-                if (_lastMinerState == VanillaMinerState.Mining && _currentState == VanillaMinerState.Idle)
-                {
-                    //Miningからidleに切り替わったのでイベントを発火
-                    InvokeChangeStateEvent();
-                    _lastMinerState = _currentState;
-                    return;
-                }
-                
-                if (_currentState == VanillaMinerState.Idle)
-                    //Idle中は発火しない
-                    return;
-                
-                //マイニング中 この時は常にイベントを発火
-                InvokeChangeStateEvent();
-            }
-            
-            void InvokeChangeStateEvent()
-            {
-                BlockException.CheckDestroy(this);
-                
-                var state = GetBlockState();
-                _blockStateChangeSubject.OnNext(state);
-            }
-            
-            
-            void InsertConnectInventory()
-            {
-                BlockException.CheckDestroy(this);
-                
-                for (var i = 0; i < _openableInventoryItemDataStoreService.InventoryItems.Count; i++)
-                {
-                    var insertedItem = _connectInventoryService.InsertItem(_openableInventoryItemDataStoreService.InventoryItems[i]);
-                    _openableInventoryItemDataStoreService.SetItem(i, insertedItem);
-                }
-            }
-            
-            #endregion
-        }
-        
-        public BlockState GetBlockState()
-        {
-            var processingRate = 1 - (float)_remainingSecond / _defaultMiningTime;
-            var binaryData = MessagePackSerializer.Serialize(new CommonMachineBlockStateChangeData(_currentPower.AsPrimitive(), RequestEnergy.AsPrimitive(), processingRate));
-            var state = new BlockState(_currentState.ToStr(), _lastMinerState.ToStr(), binaryData);
-            return state;
-        }
-        
-        private void InvokeEvent(int slot, IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            _blockInventoryUpdate.OnInventoryUpdateInvoke(new BlockOpenableInventoryUpdateEventProperties(_blockInstanceId, slot, itemStack));
-        }
-        
-        #region Implimantion IOpenableInventory
-        
-        
-        public IItemStack GetItem(int slot)
-        {
-            BlockException.CheckDestroy(this);
-            
-            return _openableInventoryItemDataStoreService.GetItem(slot);
-        }
-        
-        public void SetItem(int slot, IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            _openableInventoryItemDataStoreService.SetItem(slot, itemStack);
-        }
-        
-        public int GetSlotSize()
-        {
-            BlockException.CheckDestroy(this);
-            return _openableInventoryItemDataStoreService.GetSlotSize();
-        }
-        
-        
-        public IReadOnlyList<IItemStack> InventoryItems => _openableInventoryItemDataStoreService.InventoryItems;
-        
-        public IItemStack ReplaceItem(int slot, ItemId itemId, int count)
-        {
-            BlockException.CheckDestroy(this);
-            
-            return _openableInventoryItemDataStoreService.ReplaceItem(slot, itemId, count);
         }
         
         public IItemStack InsertItem(IItemStack itemStack)
         {
             BlockException.CheckDestroy(this);
             
-            return _openableInventoryItemDataStoreService.InsertItem(itemStack);
+            //新しく挿入可能か
+            if (_inventoryItems[^1] != null)
+                //挿入可能でない
+                return itemStack;
+            
+            _inventoryItems[^1] = new BeltConveyorInventoryItem(itemStack.Id, itemStack.ItemInstanceId);
+            
+            //挿入したのでアイテムを減らして返す
+            return itemStack.SubItem(1);
         }
         
-        public IItemStack InsertItem(ItemId itemId, int count)
+        public int GetSlotSize()
         {
             BlockException.CheckDestroy(this);
             
-            return _openableInventoryItemDataStoreService.InsertItem(itemId, count);
+            return _inventoryItems.Length;
         }
         
-        public List<IItemStack> InsertItem(List<IItemStack> itemStacks)
+        public IItemStack GetItem(int slot)
         {
             BlockException.CheckDestroy(this);
             
-            return _openableInventoryItemDataStoreService.InsertItem(itemStacks);
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            if (_inventoryItems[slot] == null) return itemStackFactory.CreatEmpty();
+            return itemStackFactory.Create(_inventoryItems[slot].ItemId, 1);
         }
         
-        public bool InsertionCheck(List<IItemStack> itemStacks)
+        public void SetItem(int slot, IItemStack itemStack)
         {
             BlockException.CheckDestroy(this);
             
-            return _openableInventoryItemDataStoreService.InsertionCheck(itemStacks);
+            //TODO lockすべき？？
+            _inventoryItems[slot] = new BeltConveyorInventoryItem(itemStack.Id, itemStack.ItemInstanceId);
         }
-        
-        public void SetItem(int slot, ItemId itemId, int count)
-        {
-            BlockException.CheckDestroy(this);
-            
-            _openableInventoryItemDataStoreService.SetItem(slot, itemId, count);
-        }
-        
-        public IItemStack ReplaceItem(int slot, IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            return _openableInventoryItemDataStoreService.ReplaceItem(slot, itemStack);
-        }
-        
-        public ReadOnlyCollection<IItemStack> CreateCopiedItems()
-        {
-            BlockException.CheckDestroy(this);
-            return _openableInventoryItemDataStoreService.CreateCopiedItems();
-        }
-        
-        #endregion
         
         public void Destroy()
         {
             IsDestroy = true;
-            _blockStateChangeSubject.Dispose();
-            _blockStateChangeSubject = null;
-        }
-    }
-    
-    public enum VanillaMinerState
-    {
-        Idle,
-        Mining,
-    }
-    
-    public static class ProcessStateExtension
-    {
-        /// <summary>
-        ///     <see cref="ProcessState" />をStringに変換します。
-        ///     EnumのToStringを使わない理由はアロケーションによる速度低下をなくすためです。
-        /// </summary>
-        public static string ToStr(this VanillaMinerState state)
-        {
-            return state switch
-            {
-                VanillaMinerState.Idle => "idle",
-                VanillaMinerState.Mining =>"mining",
-                _ => throw new ArgumentOutOfRangeException(nameof(state), state, null),
-            };
-        }
-    }
-    
-    public class VanillaElectricMinerSaveJsonObject
-    {
-        [JsonProperty("items")]
-        public List<ItemStackSaveJsonObject> Items;
-        [JsonProperty("remainingSecond")]
-        public double RemainingSecond;
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/IBlock.cs
-```cs
-using System;
-using Core.Master;
-using Game.Block.Interface.State;
-using Mooresmaster.Model.BlocksModule;
-
-namespace Game.Block.Interface
-{
-    public interface IBlock : IEquatable<IBlock>
-    {
-        public BlockInstanceId BlockInstanceId { get; }
-        public BlockId BlockId { get; }
-        public Guid BlockGuid { get; }
-        public BlockMasterElement BlockMasterElement { get; }
-        public IBlockComponentManager ComponentManager { get; }
-        public BlockPositionInfo BlockPositionInfo { get; }
-        
-        /// <summary>
-        ///     ブロックで何らかのステートが変化したときに呼び出されます
-        ///     例えば、動いている機械が止まったなど
-        ///     クライアント側で稼働アニメーションや稼働音を実行するときに使用します
-        /// </summary>
-        public IObservable<BlockState> BlockStateChange { get; }
-        
-        public BlockState GetBlockState();
-        
-        public string GetSaveState();
-        
-        public void Destroy();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/VanillaMachineProcessorComponent.cs
-```cs
-using System;
-using Game.Block.Blocks.Machine.Inventory;
-using Game.Block.Blocks.Util;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Block.Interface.State;
-using Game.EnergySystem;
-using MessagePack;
-using Mooresmaster.Model.MachineRecipesModule;
-using UniRx;
-
-namespace Game.Block.Blocks.Machine
-{
-    public class VanillaMachineProcessorComponent : IBlockStateChange, IUpdatableBlockComponent
-    {
-        public ProcessState CurrentState { get; private set; } = ProcessState.Idle;
-        
-        public double RemainingSecond { get; private set; }
-        
-        public Guid RecipeGuid => _processingRecipe?.MachineRecipeGuid ?? Guid.Empty;
-        public IObservable<BlockState> OnChangeBlockState => _changeState;
-        
-        private readonly Subject<BlockState> _changeState = new();
-        
-        private readonly VanillaMachineInputInventory _vanillaMachineInputInventory;
-        private readonly VanillaMachineOutputInventory _vanillaMachineOutputInventory;
-        
-        public readonly ElectricPower RequestPower;
-        
-        private ElectricPower _currentPower;
-        private ProcessState _lastState = ProcessState.Idle;
-        private MachineRecipeMasterElement _processingRecipe;
-        
-        
-        public VanillaMachineProcessorComponent(
-            VanillaMachineInputInventory vanillaMachineInputInventory,
-            VanillaMachineOutputInventory vanillaMachineOutputInventory,
-            MachineRecipeMasterElement machineRecipe, ElectricPower requestPower)
-        {
-            _vanillaMachineInputInventory = vanillaMachineInputInventory;
-            _vanillaMachineOutputInventory = vanillaMachineOutputInventory;
-            _processingRecipe = machineRecipe;
-            RequestPower = requestPower;
-            
-            //TODO コンポーネント化する
-        }
-        
-        public VanillaMachineProcessorComponent(
-            VanillaMachineInputInventory vanillaMachineInputInventory,
-            VanillaMachineOutputInventory vanillaMachineOutputInventory,
-            ProcessState currentState, double remainingSecond, MachineRecipeMasterElement processingRecipe,
-            ElectricPower requestPower)
-        {
-            _vanillaMachineInputInventory = vanillaMachineInputInventory;
-            _vanillaMachineOutputInventory = vanillaMachineOutputInventory;
-            
-            _processingRecipe = processingRecipe;
-            RequestPower = requestPower;
-            RemainingSecond = remainingSecond;
-            
-            CurrentState = currentState;
-        }
-        
-        public BlockState GetBlockState()
-        {
-            BlockException.CheckDestroy(this);
-            
-            var processingRate = _processingRecipe != null ? 1 - (float)RemainingSecond / _processingRecipe.Time : 0;
-            var currentState = MessagePackSerializer.Serialize(new CommonMachineBlockStateChangeData(_currentPower.AsPrimitive(), RequestPower.AsPrimitive(), processingRate));
-            return new BlockState(CurrentState.ToStr(), _lastState.ToStr(),currentState);
-        }
-        
-        public void SupplyPower(ElectricPower power)
-        {
-            _currentPower = power;
-        }
-        
-        public void Update()
-        {
-            BlockException.CheckDestroy(this);
-            
-            switch (CurrentState)
-            {
-                case ProcessState.Idle:
-                    Idle();
-                    break;
-                case ProcessState.Processing:
-                    Processing();
-                    break;
-            }
-            
-            //ステートの変化を検知した時か、ステートが処理中の時はイベントを発火させる
-            if (_lastState != CurrentState || CurrentState == ProcessState.Processing)
-            {
-                var state = GetBlockState();
-                _changeState.OnNext(state);
-                _lastState = CurrentState;
-            }
-        }
-        
-        private void Idle()
-        {
-            var isGetRecipe = _vanillaMachineInputInventory.TryGetRecipeElement(out var recipe);
-            var isStartProcess = CurrentState == ProcessState.Idle && isGetRecipe &&
-                   _vanillaMachineInputInventory.IsAllowedToStartProcess() &&
-                   _vanillaMachineOutputInventory.IsAllowedToOutputItem(recipe);
-            
-            if (isStartProcess)
-            {
-                CurrentState = ProcessState.Processing;
-                _processingRecipe = recipe;
-                _vanillaMachineInputInventory.ReduceInputSlot(_processingRecipe);
-                RemainingSecond = _processingRecipe.Time;
-            }
-        }
-        
-        private void Processing()
-        {
-            RemainingSecond -= MachineCurrentPowerToSubSecond.GetSubSecond(_currentPower, RequestPower);
-            if (RemainingSecond <= 0)
-            {
-                CurrentState = ProcessState.Idle;
-                _vanillaMachineOutputInventory.InsertOutputSlot(_processingRecipe);
-            }
-            
-            //電力を消費する
-            _currentPower = new ElectricPower(0);
-        }
-        
-        public bool IsDestroy { get; private set; }
-        public void Destroy()
-        {
-            IsDestroy = true;
-        }
-    }
-    
-    public static class ProcessStateExtension
-    {
-        /// <summary>
-        ///     <see cref="ProcessState" />をStringに変換します。
-        ///     EnumのToStringを使わない理由はアロケーションによる速度低下をなくすためです。
-        /// </summary>
-        public static string ToStr(this ProcessState state)
-        {
-            return state switch
-            {
-                ProcessState.Idle => VanillaMachineBlockStateConst.IdleState,
-                ProcessState.Processing => VanillaMachineBlockStateConst.ProcessingState,
-                _ => throw new ArgumentOutOfRangeException(nameof(state), state, null),
-            };
-        }
-    }
-    
-    public enum ProcessState
-    {
-        Idle,
-        Processing,
-    }
-}
-```
-
-moorestech_client/Assets/Scripts/Client.Game/InGame/Block/BlockGameObject.cs
-```cs
-using System.Collections.Generic;
-using System.Linq;
-using Client.Common;
-using Client.Game.InGame.BlockSystem.StateProcessor;
-using Core.Master;
-using Cysharp.Threading.Tasks;
-using Game.Block.Interface;
-using Mooresmaster.Model.BlocksModule;
-using UnityEngine;
-using UnityEngine.VFX;
-
-namespace Client.Game.InGame.Block
-{
-    public class BlockGameObject : MonoBehaviour
-    {
-        public BlockId BlockId { get; private set; }
-        public BlockMasterElement BlockMasterElement { get; private set; }
-        public BlockPositionInfo BlockPosInfo { get; private set; }
-        public IBlockStateChangeProcessor BlockStateChangeProcessor { get; private set; }
-        
-        private BlockShaderAnimation _blockShaderAnimation;
-        private RendererMaterialReplacerController _rendererMaterialReplacerController;
-        private bool _isShaderAnimationing;
-        private List<VisualEffect> _visualEffects;
-        
-        
-        public void Initialize(BlockMasterElement blockMasterElement, BlockPositionInfo posInfo, IBlockStateChangeProcessor blockStateChangeProcessor)
-        {
-            BlockPosInfo = posInfo;
-            BlockId = MasterHolder.BlockMaster.GetBlockId(blockMasterElement.BlockGuid);
-            BlockMasterElement = blockMasterElement;
-            BlockStateChangeProcessor = blockStateChangeProcessor;
-            _visualEffects = gameObject.GetComponentsInChildren<VisualEffect>(true).ToList();
-            _blockShaderAnimation = gameObject.AddComponent<BlockShaderAnimation>();
-           
-            _rendererMaterialReplacerController = new RendererMaterialReplacerController(gameObject);
-            
-            // 子供のBlockGameObjectChildを初期化
-            foreach (var child in gameObject.GetComponentsInChildren<BlockGameObjectChild>()) child.Init(this);
-            
-            // 地面との衝突判定を無効化
-            foreach (var groundCollisionDetector in gameObject.GetComponentsInChildren<GroundCollisionDetector>(true))
-            {
-                groundCollisionDetector.enabled = false;
-            }
-        }
-        
-        public async UniTask PlayPlaceAnimation()
-        {
-            _isShaderAnimationing = true;
-            SetVfxActive(false);
-            await _blockShaderAnimation.PlaceAnimation();
-            _isShaderAnimationing = false;
-            SetVfxActive(true);
-        }
-        
-        public void SetRemovePreviewing()
-        {
-            if (_isShaderAnimationing) return;
-            var placePreviewMaterial = Resources.Load<Material>(MaterialConst.PreviewPlaceBlockMaterial);
-            
-            _rendererMaterialReplacerController.CopyAndSetMaterial(placePreviewMaterial);
-            _rendererMaterialReplacerController.SetColor(MaterialConst.NotPlaceableColor);
-            Resources.UnloadAsset(placePreviewMaterial);
-        }
-        
-        public void ResetMaterial()
-        {
-            if (_isShaderAnimationing) return;
-            _rendererMaterialReplacerController.ResetMaterial();
-        }
-        
-        public async UniTask DestroyBlock()
-        {
-            _isShaderAnimationing = true;
-            SetVfxActive(false);
-            await _blockShaderAnimation.RemoveAnimation();
-            Destroy(gameObject);
-        }
-        
-        private void SetVfxActive(bool isActive)
-        {
-            foreach (var vfx in _visualEffects) vfx.gameObject.SetActive(isActive);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/VanillaGearMachineComponent.cs
-```cs
-using Game.Block.Blocks.Gear;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.EnergySystem;
-using Game.Gear.Common;
-using Mooresmaster.Model.BlocksModule;
-using UniRx;
-using UnityEngine;
-
-namespace Game.Block.Blocks.Machine
-{
-    /// <summary>
-    ///     歯車機械を表すクラス
-    /// </summary>
-    public class VanillaGearMachineComponent : IBlockComponent
-    {
-        private readonly GearEnergyTransformer _gearEnergyTransformer;
-        private readonly VanillaMachineProcessorComponent _vanillaMachineProcessorComponent;
-        private readonly GearMachineBlockParam _gearMachineBlockParam;
-        
-        public VanillaGearMachineComponent(VanillaMachineProcessorComponent vanillaMachineProcessorComponent, GearEnergyTransformer gearEnergyTransformer, GearMachineBlockParam gearMachineBlockParam)
-        {
-            _vanillaMachineProcessorComponent = vanillaMachineProcessorComponent;
-            _gearEnergyTransformer = gearEnergyTransformer;
-            _gearMachineBlockParam = gearMachineBlockParam;
-            
-            _gearEnergyTransformer.OnGearUpdate.Subscribe(OnGearUpdate);
-        }
-        
-        private void OnGearUpdate(GearUpdateType gearUpdateType)
-        {
-            var requiredRpm = new RPM(_gearMachineBlockParam.RequiredRpm);
-            var requireTorque = new Torque(_gearMachineBlockParam.RequireTorque);
-            
-            var currentElectricPower = _gearEnergyTransformer.CalcMachineSupplyPower(requiredRpm, requireTorque);
-            _vanillaMachineProcessorComponent.SupplyPower(currentElectricPower);
-        }
-        
-        public bool IsDestroy { get; private set; }
-        public void Destroy()
-        {
-            BlockException.CheckDestroy(this);
-            IsDestroy = true;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/Component/IBlockComponent.cs
-```cs
-namespace Game.Block.Interface.Component
-{
-    public interface IBlockComponent
-    {
-        public bool IsDestroy { get; }
-        
-        public void Destroy();
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/BlockSystem.cs
-```cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Core.Master;
-using Core.Update;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Block.Interface.State;
-using Game.Context;
-using Mooresmaster.Model.BlocksModule;
-using UniRx;
-
-namespace Game.Block.Blocks
-{
-    public class BlockSystem : IBlock
-    {
-        public BlockInstanceId BlockInstanceId { get; }
-        public BlockId BlockId { get; }
-        public Guid BlockGuid => BlockMasterElement.BlockGuid;
-        public BlockMasterElement BlockMasterElement { get; }
-        public IBlockComponentManager ComponentManager => _blockComponentManager;
-        public BlockPositionInfo BlockPositionInfo { get; }
-        public IObservable<BlockState> BlockStateChange => _onBlockStateChange;
-        
-        
-        private readonly BlockComponentManager _blockComponentManager = new();
-        
-        private readonly IBlockStateChange _blockStateChange;
-        private readonly Subject<BlockState> _onBlockStateChange = new();
-        private readonly IUpdatableBlockComponent[] _updatableComponents;
-        private readonly IDisposable _blockUpdateDisposable;
-        
-        
-        public BlockSystem(BlockInstanceId blockInstanceId, Guid blockGuid, List<IBlockComponent> blockComponents, BlockPositionInfo blockPositionInfo)
-        {
-            BlockInstanceId = blockInstanceId;
-            BlockPositionInfo = blockPositionInfo;
-            BlockId = MasterHolder.BlockMaster.GetBlockId(blockGuid);
-            BlockMasterElement = MasterHolder.BlockMaster.GetBlockMaster(BlockId);
-            
-            _blockComponentManager = new BlockComponentManager();
-            _blockComponentManager.AddComponents(blockComponents);
-            
-            _blockStateChange = _blockComponentManager.GetComponent<IBlockStateChange>();
-            _blockStateChange?.OnChangeBlockState.Subscribe(state => { _onBlockStateChange.OnNext(state); });
-            
-            // NOTE 他の場所からコンポーネントを追加するようになったら、このリストに追加するようにする
-            _updatableComponents = blockComponents.OfType<IUpdatableBlockComponent>().ToArray();
-            
-            _blockUpdateDisposable = GameUpdater.UpdateObservable.Subscribe(_ => Update());
-        }
-        
-        public BlockState GetBlockState()
-        {
-            return _blockStateChange?.GetBlockState();
         }
         
         public string GetSaveState()
         {
-            return _blockComponentManager.TryGetComponent<IBlockSaveState>(out var blockSaveState) ? blockSaveState.GetSaveState() : string.Empty;
+            BlockException.CheckDestroy(this);
+            
+            if (_inventoryItems.Length == 0) return string.Empty;
+            
+            var saveItems = new List<BeltConveyorItemJsonObject>();
+            foreach (var t in _inventoryItems) saveItems.Add(new BeltConveyorItemJsonObject(t));
+            
+            return JsonConvert.SerializeObject(saveItems);
+        }
+        
+        /// <summary>
+        ///     アイテムの搬出判定を行う
+        ///     判定はUpdateで毎フレーム行われる
+        ///     TODO 個々のマルチスレッド対応もいい感じにやりたい
+        /// </summary>
+        public void Update()
+        {
+            BlockException.CheckDestroy(this);
+            
+            //TODO lockすべき？？
+            var count = _inventoryItems.Length;
+            
+            if (_blockName == VanillaBeltConveyorTemplate.Hueru && _inventoryItems[0] == null) _inventoryItems[0] = new BeltConveyorInventoryItem(new ItemId(4), ItemInstanceId.Create());
+            for (var i = 0; i < count; i++)
+            {
+                var item = _inventoryItems[i];
+                if (item == null) continue;
+                
+                //次のインデックスに入れる時間かどうかをチェックする
+                var nextIndexStartTime = i * (1f / InventoryItemNum);
+                var isNextInsertable = item.RemainingPercent <= nextIndexStartTime;
+                
+                //次に空きがあれば次に移動する
+                if (isNextInsertable && i != 0)
+                {
+                    if (_inventoryItems[i - 1] == null)
+                    {
+                        _inventoryItems[i - 1] = item;
+                        _inventoryItems[i] = null;
+                    }
+                    
+                    continue;
+                }
+                
+                //最後のアイテムの場合は接続先に渡す
+                if (i == 0 && item.RemainingPercent <= 0)
+                {
+                    if (_blockName == VanillaBeltConveyorTemplate.Kieru) _inventoryItems[i] = null;
+                    
+                    var insertItem = ServerContext.ItemStackFactory.Create(item.ItemId, 1, item.ItemInstanceId);
+                    
+                    if (_blockConnectorComponent.ConnectedTargets.Count == 0) continue;
+                    
+                    var connector = _blockConnectorComponent.ConnectedTargets.First();
+                    var output = connector.Key.InsertItem(insertItem);
+                    
+                    //渡した結果がnullItemだったらそのアイテムを消す
+                    if (output.Id == ItemMaster.EmptyItemId) _inventoryItems[i] = null;
+                    
+                    continue;
+                }
+                
+                //時間を減らす 
+                item.RemainingPercent -= (float)(GameUpdater.UpdateSecondTime * (1f / (float)_timeOfItemEnterToExit));
+            }
+        }
+        
+        public void SetTimeOfItemEnterToExit(double time)
+        {
+            _timeOfItemEnterToExit = time;
+        }
+        
+        public BeltConveyorInventoryItem GetBeltConveyorItem(int index)
+        {
+            BlockException.CheckDestroy(this);
+            return _inventoryItems[index];
+        }
+    }
+    
+    public class BeltConveyorItemJsonObject
+    {
+        [JsonProperty("itemStack")] public ItemStackSaveJsonObject ItemStack;
+        
+        [JsonProperty("remainingTime")] public double RemainingPercent;
+        
+        public BeltConveyorItemJsonObject(BeltConveyorInventoryItem beltConveyorInventoryItem)
+        {
+            if (beltConveyorInventoryItem == null)
+            {
+                ItemStack = null;
+                RemainingPercent = 1;
+                return;
+            }
+            
+            var item = ServerContext.ItemStackFactory.Create(beltConveyorInventoryItem.ItemId, 1);
+            ItemStack = new ItemStackSaveJsonObject(item);
+            RemainingPercent = beltConveyorInventoryItem.RemainingPercent;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/MachineIOTest.cs
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using Core.Const;
+using Core.Item.Interface;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Machine;
+using Game.Block.Blocks.Machine.Inventory;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.EnergySystem;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.CombinedTest.Core
+{
+    public class MachineIOTest
+    {
+        //アイテムが通常通り処理されるかのテスト
+        [Test]
+        public void ItemProcessingOutputTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var recipe = MasterHolder.MachineRecipesMaster.MachineRecipes.Data[0];
+            
+            
+            var blockId = MasterHolder.BlockMaster.GetBlockId(recipe.BlockGuid);
+            var block = blockFactory.Create(blockId, new BlockInstanceId(1), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var blockInventory = block.GetComponent<VanillaMachineBlockInventoryComponent>();
+            foreach (var inputItem in recipe.InputItems)
+            {
+                blockInventory.InsertItem(itemStackFactory.Create(inputItem.ItemGuid, inputItem.Count));
+            }
+            
+            var blockMachineComponent = block.GetComponent<VanillaElectricMachineComponent>();
+            
+            var craftTime = DateTime.Now.AddSeconds(recipe.Time);
+            //最大クラフト時間を超過するまでクラフトする
+            while (craftTime.AddSeconds(0.2).CompareTo(DateTime.Now) == 1)
+            {
+                blockMachineComponent.SupplyEnergy(new ElectricPower(10000));
+                GameUpdater.UpdateWithWait();
+            }
+            
+            //検証
+            (List<IItemStack> input, List<IItemStack> output) = GetInputOutputSlot(blockInventory);
+            
+            Assert.AreEqual(0, input.Count);
+            foreach (var inputItem in input) Assert.AreEqual(ItemMaster.EmptyItemId, inputItem.Id);
+            
+            Assert.AreNotEqual(0, output.Count);
+            for (var i = 0; i < output.Count; i++)
+            {
+                var expectedOutputId = MasterHolder.ItemMaster.GetItemId(recipe.OutputItems[i].ItemGuid);
+                Assert.AreEqual(expectedOutputId, output[i].Id);
+                Assert.AreEqual(recipe.OutputItems[i].Count, output[i].Count);
+            }
+        }
+        
+        public (List<IItemStack>, List<IItemStack>) GetInputOutputSlot(VanillaMachineBlockInventoryComponent vanillaMachineInventory)
+        {
+            var vanillaMachineInputInventory = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(vanillaMachineInventory);
+            var vanillaMachineOutputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
+                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(vanillaMachineInventory);
+            
+            var inputSlot = vanillaMachineInputInventory.InputSlot.Where(i => i.Count != 0).ToList();
+            inputSlot.Sort((a, b) => a.Id.AsPrimitive() - b.Id.AsPrimitive());
+            
+            var outputSlot = vanillaMachineOutputInventory.OutputSlot.Where(i => i.Count != 0).ToList();
+            outputSlot.Sort((a, b) => a.Id.AsPrimitive() - b.Id.AsPrimitive());
+            
+            return (inputSlot, outputSlot);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/Inventory/VanillaMachineInputInventory.cs
+```cs
+using System.Collections.Generic;
+using Core.Inventory;
+using Core.Item.Interface;
+using Core.Master;
+using Game.Block.Event;
+using Game.Block.Interface;
+using Game.Block.Interface.Event;
+using Game.Context;
+using Mooresmaster.Model.MachineRecipesModule;
+
+namespace Game.Block.Blocks.Machine.Inventory
+{
+    /// <summary>
+    ///     インプットのインベントリとアウトプットのインベントリを同じように扱う
+    ///     Insertなどの処理は基本的にInputのインベントリにのみ行う
+    /// </summary>
+    public class VanillaMachineInputInventory
+    {
+        private readonly BlockId _blockId;
+        
+        private readonly BlockOpenableInventoryUpdateEvent _blockInventoryUpdate;
+        private readonly BlockInstanceId _blockInstanceId;
+        private readonly OpenableInventoryItemDataStoreService _itemDataStoreService;
+        
+        public VanillaMachineInputInventory(BlockId blockId, int inputSlot, BlockOpenableInventoryUpdateEvent blockInventoryUpdate, BlockInstanceId blockInstanceId)
+        {
+            _blockId = blockId;
+            _blockInventoryUpdate = blockInventoryUpdate;
+            _blockInstanceId = blockInstanceId;
+            _itemDataStoreService = new OpenableInventoryItemDataStoreService(InvokeEvent, ServerContext.ItemStackFactory, inputSlot);
+        }
+        
+        public IReadOnlyList<IItemStack> InputSlot => _itemDataStoreService.InventoryItems;
+        
+        public bool IsAllowedToStartProcess()
+        {
+            //ブロックIDと現在のインプットスロットからレシピを検索する
+            if (TryGetRecipeElement(out var recipe))
+            {
+                //実行できるレシピかどうか
+                return recipe.RecipeConfirmation(_blockId, InputSlot);
+            }
+            return false;
+        }
+        
+        public IItemStack InsertItem(IItemStack itemStack)
+        {
+            return _itemDataStoreService.InsertItem(itemStack);
+        }
+        
+        public List<IItemStack> InsertItem(List<IItemStack> itemStacks)
+        {
+            return _itemDataStoreService.InsertItem(itemStacks);
+        }
+        
+        public bool TryGetRecipeElement(out MachineRecipeMasterElement recipe)
+        {
+            return MachineRecipeMasterUtil.TryGetRecipeElement(_blockId, InputSlot, out recipe);
+        }
+        
+        public void ReduceInputSlot(MachineRecipeMasterElement recipe)
+        {
+            //inputスロットからアイテムを減らす
+            foreach (var item in recipe.InputItems)
+                for (var i = 0; i < InputSlot.Count; i++)
+                {
+                    var itemId = MasterHolder.ItemMaster.GetItemId(item.ItemGuid);
+                    
+                    if (_itemDataStoreService.InventoryItems[i].Id != itemId || item.Count > InputSlot[i].Count) continue;
+                    //アイテムを減らす
+                    _itemDataStoreService.SetItem(i, InputSlot[i].SubItem(item.Count));
+                    break;
+                }
+        }
+        
+        public void SetItem(int slot, IItemStack itemStack)
+        {
+            _itemDataStoreService.SetItem(slot, itemStack);
+        }
+        
+        public bool InsertionCheck(List<IItemStack> itemStacks)
+        {
+            return _itemDataStoreService.InsertionCheck(itemStacks);
+        }
+        
+        private void InvokeEvent(int slot, IItemStack itemStack)
+        {
+            _blockInventoryUpdate.OnInventoryUpdateInvoke(new BlockOpenableInventoryUpdateEventProperties(
+                _blockInstanceId, slot, itemStack));
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/Inventory/VanillaMachineOutputInventory.cs
+```cs
+using System.Collections.Generic;
+using System.Linq;
+using Core.Inventory;
+using Core.Item.Interface;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Service;
+using Game.Block.Component;
+using Game.Block.Event;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Event;
+using Game.Context;
+using Mooresmaster.Model.MachineRecipesModule;
+using UniRx;
+
+namespace Game.Block.Blocks.Machine.Inventory
+{
+    public class VanillaMachineOutputInventory
+    {
+        public IReadOnlyList<IItemStack> OutputSlot => _itemDataStoreService.InventoryItems;
+        
+        private readonly BlockOpenableInventoryUpdateEvent _blockInventoryUpdate;
+        private readonly ConnectingInventoryListPriorityInsertItemService _connectInventoryService;
+        private readonly BlockInstanceId _blockInstanceId;
+        
+        private readonly int _inputSlotSize;
+        private readonly OpenableInventoryItemDataStoreService _itemDataStoreService;
+        
+        public VanillaMachineOutputInventory(int outputSlot, IItemStackFactory itemStackFactory,
+            BlockOpenableInventoryUpdateEvent blockInventoryUpdate, BlockInstanceId blockInstanceId, int inputSlotSize, BlockConnectorComponent<IBlockInventory> blockConnectorComponent)
+        {
+            _blockInventoryUpdate = blockInventoryUpdate;
+            _blockInstanceId = blockInstanceId;
+            _inputSlotSize = inputSlotSize;
+            _itemDataStoreService = new OpenableInventoryItemDataStoreService(InvokeEvent, itemStackFactory, outputSlot);
+            _connectInventoryService = new ConnectingInventoryListPriorityInsertItemService(blockConnectorComponent);
+            GameUpdater.UpdateObservable.Subscribe(_ => Update());
         }
         
         private void Update()
         {
-            foreach (var component in _updatableComponents)
+            InsertConnectInventory();
+        }
+        
+        /// <summary>
+        ///     アウトプットスロットにアイテムを入れれるかチェック
+        /// </summary>
+        /// <param name="machineRecipe"></param>
+        /// <returns>スロットに空きがあったらtrue</returns>
+        public bool IsAllowedToOutputItem(MachineRecipeMasterElement machineRecipe)
+        {
+            foreach (var itemOutput in machineRecipe.OutputItems)
             {
-                component.Update();
+                var outputItemId = MasterHolder.ItemMaster.GetItemId(itemOutput.ItemGuid);
+                var outputItemStack = ServerContext.ItemStackFactory.Create(outputItemId, itemOutput.Count);
+                
+                var isAllowed = OutputSlot.Aggregate(false, (current, slot) => slot.IsAllowedToAdd(outputItemStack) || current);
+                
+                if (!isAllowed) return false;
             }
-        }
-        
-        public void Destroy()
-        {
-            _blockComponentManager.Destroy();
-            _blockUpdateDisposable.Dispose();
-        }
-        
-        public bool Equals(IBlock other)
-        {
-            if (other is null) return false;
-            return BlockInstanceId == other.BlockInstanceId;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block.Interface/BlockException.cs
-```cs
-using System;
-using Game.Block.Interface.Component;
-
-namespace Game.Block.Interface
-{
-    public static class BlockException
-    {
-        private const string IsDestroyed = "This component is already destroyed";
-        private static readonly InvalidOperationException IsDestroyedException = new(IsDestroyed);
-        
-        public static void CheckDestroy(IBlockComponent blockComponent)
-        {
-            if (blockComponent.IsDestroy)
-            {
-                throw IsDestroyedException;
-            }
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Core.Update/GameUpdater.cs
-```cs
-using System;
-using System.Threading;
-using UniRx;
-
-namespace Core.Update
-{
-    public static class GameUpdater
-    {
-        private static Subject<Unit> _updateSubject = new();
-        
-        private static DateTime _lastUpdateTime = DateTime.Now;
-        public static IObservable<Unit> UpdateObservable => _updateSubject;
-        
-        [Obsolete("いつかアップデートシステム自体をリファクタしたい")] public static double UpdateSecondTime { get; private set; }
-        
-        public static void Update()
-        {
-            //アップデートの実行
-            UpdateDeltaTime();
-            _updateSubject.OnNext(Unit.Default);
-        }
-        
-        public static void UpdateDeltaTime()
-        {
-            UpdateSecondTime = (DateTime.Now - _lastUpdateTime).TotalSeconds;
-            _lastUpdateTime = DateTime.Now;
             
+            return true;
         }
         
-        public static void ResetUpdate()
+        public void InsertOutputSlot(MachineRecipeMasterElement machineRecipe)
         {
-            _updateSubject = new Subject<Unit>();
-            UpdateSecondTime = 0;
-            _lastUpdateTime = DateTime.Now;
+            //アウトプットスロットにアイテムを格納する
+            foreach (var itemOutput in machineRecipe.OutputItems)
+                for (var i = 0; i < OutputSlot.Count; i++)
+                {
+                    var outputItemId = MasterHolder.ItemMaster.GetItemId(itemOutput.ItemGuid);
+                    var outputItemStack = ServerContext.ItemStackFactory.Create(outputItemId, itemOutput.Count);
+                    
+                    if (!OutputSlot[i].IsAllowedToAdd(outputItemStack)) continue;
+                    
+                    var item = OutputSlot[i].AddItem(outputItemStack).ProcessResultItemStack;
+                    _itemDataStoreService.SetItem(i, item);
+                    break;
+                }
         }
         
-        public static void ResetTime()
+        private void InsertConnectInventory()
         {
-            _lastUpdateTime = DateTime.Now;
-            UpdateSecondTime = 0;
+            for (var i = 0; i < OutputSlot.Count; i++)
+                _itemDataStoreService.SetItem(i, _connectInventoryService.InsertItem(OutputSlot[i]));
         }
         
-        public static void Dispose()
+        public void SetItem(int slot, IItemStack itemStack)
         {
-            _updateSubject.Dispose();
+            _itemDataStoreService.SetItem(slot, itemStack);
         }
         
-#if UNITY_EDITOR
-        public static void UpdateWithWait()
+        
+        private void InvokeEvent(int slot, IItemStack itemStack)
         {
-            //TODO ゲームループ周りの修正についてはちょっと考えたい
-            Update();
-            Wait();
+            _blockInventoryUpdate.OnInventoryUpdateInvoke(new BlockOpenableInventoryUpdateEventProperties(
+                _blockInstanceId, slot + _inputSlotSize, itemStack));
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/CraftNetwork/CraftChainerNetwork.cs
+```cs
+using System.Collections.Generic;
+
+namespace Game.CraftChainer.CraftNetwork
+{
+    public class CraftChainerNetwork
+    {
+        public List<ICraftChainerNode> CraftChainerNodes; // TODO ネットワークの異常検知
+        
+        public ICraftChainerNode GetInsertTargetNode(ICraftChainerNode currentNode, CraftChainerNodeId targetNodeId)
+        {
+            // TODO ルートを計算
+            
+            // TODO 次のノードを返す
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChain/CraftChainItem.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Core.Master;
+using Mooresmaster.Model.CraftRecipesModule;
+using Mooresmaster.Model.MachineRecipesModule;
+using UnityEngine;
+
+namespace Game.CraftChainer
+{
+    public struct CraftChainItem : IEquatable<CraftChainItem>
+    {
+        public ItemId ItemId { get; }
+        public int Count { get; }
+        
+        public CraftChainItem(ItemId itemId, int count)
+        {
+            ItemId = itemId;
+            Count = count;
         }
         
-        public static void Wait()
+        public bool Equals(CraftChainItem other)
         {
-            Thread.Sleep(5);
+            return ItemId.Equals(other.ItemId) && Count == other.Count;
         }
-#endif
+        public override bool Equals(object obj)
+        {
+            return obj is CraftChainItem other && Equals(other);
+        }
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(ItemId, Count);
+        }
+    }
+    
+    public static class CraftChainItemUtil
+    {
+        public static List<CraftChainItem> ToResultCraftChainItems(this CraftRecipeMasterElement craftRecipeMaster, CraftChainItem targetCraftChainItem)
+        {
+            var requireCraftCount = GetRequireCraftCount(craftRecipeMaster, targetCraftChainItem);
+            
+            var resultItemId = MasterHolder.ItemMaster.GetItemId(craftRecipeMaster.CraftResultItemGuid);
+            var resultItemCount = craftRecipeMaster.CraftResultCount * requireCraftCount;
+            return new List<CraftChainItem> { new(resultItemId, resultItemCount) };
+        }
+        
+        public static List<CraftChainItem> ToRequireCraftChainItems(this CraftRecipeMasterElement craftRecipeMaster, CraftChainItem targetCraftChainItem)
+        {
+            var requireCraftCount = GetRequireCraftCount(craftRecipeMaster, targetCraftChainItem);
+            
+            var requireCraftItems = new List<CraftChainItem>();
+            foreach (var requiredItem in craftRecipeMaster.RequiredItems)
+            {
+                var requiredItemId = MasterHolder.ItemMaster.GetItemId(requiredItem.ItemGuid);
+                var requiredItemCount = requiredItem.Count * requireCraftCount;
+                
+                requireCraftItems.Add(new CraftChainItem(requiredItemId, requiredItemCount));
+            }
+            
+            return requireCraftItems;
+        }
+        
+        private static int GetRequireCraftCount(CraftRecipeMasterElement craftRecipeMaster,CraftChainItem targetCraftChainItem)
+        {
+            return Mathf.CeilToInt(craftRecipeMaster.CraftResultCount / (float)targetCraftChainItem.Count);
+        }
+        
+        public static List<CraftChainItem> ToResultMachineChainItems(this MachineRecipeMasterElement recipeMasterElement, CraftChainItem targetCraftChainItem)
+        {
+            var requireCount = GetRequireMachineCraftCount(recipeMasterElement, targetCraftChainItem);
+            
+            var result = new List<CraftChainItem>();
+            foreach (var outputItem in recipeMasterElement.OutputItems)
+            {
+                var outputItemId = MasterHolder.ItemMaster.GetItemId(outputItem.ItemGuid);
+                var outputItemCount = outputItem.Count * requireCount;
+                
+                result.Add(new CraftChainItem(outputItemId, outputItemCount));
+            }
+            
+            return result;
+        }
+        
+        public static List<CraftChainItem> ToRequireMachineChainItems(this MachineRecipeMasterElement recipeMasterElement, CraftChainItem targetCraftChainItem)
+        {
+            var requireCount = GetRequireMachineCraftCount(recipeMasterElement, targetCraftChainItem);
+            
+            var result = new List<CraftChainItem>();
+            foreach (var requiredItem in recipeMasterElement.InputItems)
+            {
+                var requiredItemId = MasterHolder.ItemMaster.GetItemId(requiredItem.ItemGuid);
+                var requiredItemCount = requiredItem.Count * requireCount;
+                
+                result.Add(new CraftChainItem(requiredItemId, requiredItemCount));
+            }
+            
+            return result;
+        }
+        
+        private static int GetRequireMachineCraftCount(MachineRecipeMasterElement recipeMasterElement, CraftChainItem targetCraftChainItem)
+        {
+            var outputCount = -1;
+            
+            // アウトプットアイテムの出力個数を取得
+            foreach (var outputItem in recipeMasterElement.OutputItems)
+            {
+                var outputItemId = MasterHolder.ItemMaster.GetItemId(outputItem.ItemGuid);
+                if (targetCraftChainItem.ItemId == outputItemId)
+                {
+                    outputCount = outputItem.Count;
+                    break;
+                }
+            }
+            
+            if (outputCount == -1)
+            {
+                var itemGuid = MasterHolder.ItemMaster.GetItemMaster(targetCraftChainItem.ItemId);
+                throw new Exception($"指定しているアイテムをアウトプットしない機械レシピでした。レシピGUID：{recipeMasterElement.MachineRecipeGuid} アイテムGUID：{itemGuid}");
+            }
+            
+            return outputCount / targetCraftChainItem.Count;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChain/CraftChainTreeNode.cs
+```cs
+using System.Collections.Generic;
+using Core.Item.Interface;
+using Core.Master;
+
+namespace Game.CraftChainer
+{
+    public class CraftChainTreeNode : ICraftChainTreeNode
+    {
+        /// <summary>
+        /// このクラフトによって作られるアイテム
+        /// </summary>
+        public List<CraftChainItem> ResultItems { get; }
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        public Dictionary<ItemId, List<RequiredItemProperty>> RequiredItems { get; }
+        
+        public string CraftRecipeType { get; }
+        // TODO レシピの実態をホールド
+        
+        public CraftChainTreeNode(string craftRecipeType, List<CraftChainItem> resultItems, Dictionary<ItemId, List<RequiredItemProperty>> requiredItems)
+        {
+            CraftRecipeType = craftRecipeType;
+            ResultItems = resultItems;
+            RequiredItems = requiredItems;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChain/ICraftChainTreeNode.cs
+```cs
+using System.Collections.Generic;
+using Core.Item.Interface;
+using Core.Master;
+using Game.CraftChainer.CraftNetwork;
+
+namespace Game.CraftChainer
+{
+    /// <summary>
+    /// あるアイテムを作るために必要なレシピの連鎖、中間素材の作成の連鎖をツリーで表現したInterface
+    /// </summary>
+    public interface ICraftChainTreeNode
+    {
+        public const string CraftRecipe = "CraftRecipe";
+        public const string MachineRecipe = "MachineRecipe";
+        
+        public string CraftRecipeType { get; }
+        
+        public List<CraftChainItem> ResultItems { get; }
+        public Dictionary<ItemId, List<RequiredItemProperty>> RequiredItems{ get; }
+    }
+    
+    public struct RequiredItemProperty
+    {
+        public CraftChainItem CraftItem { get; }
+        public ICraftChainTreeNode Node { get;  }
+        
+        public RequiredItemProperty(CraftChainItem craftItem, ICraftChainTreeNode node)
+        {
+            CraftItem = craftItem;
+            Node = node;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChain/CraftChainTreeBuilder.cs
+```cs
+using System.Collections.Generic;
+using Core.Master;
+using Game.CraftChainer.Util;
+using UnityEngine;
+
+namespace Game.CraftChainer
+{
+    public class CraftChainTreeBuilder
+    {
+        private readonly ItemRecipeViewerDataContainer _itemRecipeViewerDataContainer;
+
+        public CraftChainTreeBuilder(ItemRecipeViewerDataContainer itemRecipeViewerDataContainer)
+        {
+            _itemRecipeViewerDataContainer = itemRecipeViewerDataContainer;
+        }
+
+        public List<ICraftChainTreeNode> BuildCraftChainTree(CraftChainItem targetCraftChainItem)
+        {
+            // TODO ループ検知
+            // TODO 原材料の場合はそれも検知させる
+            
+            var result = new List<ICraftChainTreeNode>();
+            
+            // クラフトのレシピの取得
+            var recipes = _itemRecipeViewerDataContainer.GetItem(targetCraftChainItem.ItemId);
+            foreach (var craftRecipe in recipes.CraftRecipes)
+            {
+                var requireCraftChainItems = craftRecipe.ToRequireCraftChainItems(targetCraftChainItem);
+                var requireItems = new Dictionary<ItemId, List<RequiredItemProperty>>();
+                foreach (var craftChain in requireCraftChainItems)
+                {
+                    var childrenNodes = BuildCraftChainTree(craftChain);
+                    foreach (var childNode in childrenNodes)
+                    {
+                        var requiredItem = new RequiredItemProperty(craftChain, childNode);
+                        if (requireItems.TryGetValue(craftChain.ItemId , out var list))
+                        {
+                            list.Add(requiredItem);
+                        }
+                        else
+                        {
+                            requireItems.Add(craftChain.ItemId, new List<RequiredItemProperty> { requiredItem });
+                        }
+                    }
+                }
+                
+                var results = craftRecipe.ToResultCraftChainItems(targetCraftChainItem);
+                result.Add(new CraftChainTreeNode(ICraftChainTreeNode.CraftRecipe, results, requireItems));
+            }
+            
+            // 機械加工のレシピの取得
+            foreach (var machineRecipe in recipes.MachineRecipes)
+            {
+                foreach (var recipeMaster in machineRecipe.Value)
+                {
+                    // 目的のアイテムの製造個数をチェックする
+                    var requireCraftChainItems = recipeMaster.ToRequireMachineChainItems(targetCraftChainItem);
+                    var requireItems = new Dictionary<ItemId, List<RequiredItemProperty>>();
+                    foreach (var craftChain in requireCraftChainItems)
+                    {
+                        var childrenNodes = BuildCraftChainTree(craftChain);
+                        foreach (var childNode in childrenNodes)
+                        {
+                            var requiredItem = new RequiredItemProperty(craftChain, childNode);
+                            if (requireItems.TryGetValue(craftChain.ItemId , out var list))
+                            {
+                                list.Add(requiredItem);
+                            }
+                            else
+                            {
+                                requireItems.Add(craftChain.ItemId, new List<RequiredItemProperty> { requiredItem });
+                            }
+                        }
+                    }
+                    
+                    // リザルトのアイテムを作成する
+                    var resultItem = recipeMaster.ToResultMachineChainItems(targetCraftChainItem);
+                    result.Add(new CraftChainTreeNode(ICraftChainTreeNode.MachineRecipe, resultItem, requireItems));
+                }
+            }
+            
+            return result;
+        }
+    }
+}
+
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/CraftNetwork/CraftChainerItem.cs
+```cs
+namespace Game.CraftChainer.CraftNetwork
+{
+    public class CraftChainerItem
+    {
+        public CraftChainerNodeId TargetNodeId { get; } // TODO クラフト中にネットワークが変更されたときのことを考えておく
+        
+        
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/CraftNetwork/Node/CraftChain.cs
+```cs
+namespace Game.CraftChainer.CraftNetwork.Node
+{
+    public class CraftChain
+    {
+        private readonly CraftChainTreeBuilder _craftChainTreeBuilder;
+        
+        public void RequestItem(CraftChainItem craftChainItem)
+        {
+            // TODO クラフトノードを構築
+            // TODO 使えるクラフトチャートを選定する
+            
+            // TODO クラフトをノードの橋から実行
+        }
+        
+        
+        
+        private CraftChainTreeNode GetEnableCraftChainTree(CraftChainItem targetItem)
+        {
+            var tree = _craftChainTreeBuilder.BuildCraftChainTree(targetItem);
+                
+            // TODO すべての原材料があるかどうかをチェックする
+            // TODO もしなければ、その材料となるアイテムがあるかどうかをチェックする
+        }
     }
 }
 ```
@@ -3122,20 +2629,57 @@ namespace Core.Update
 また、コードを出力する際は細切れにせず、基本的に全文を出力するようにしてください。
 
 # Instructions
-ブロックを破壊したとき、以下のようなエラーが発生しました。
-このエラーの原因と対処法を教えてください。
+ # ロジパイプ仕様
 
-```cs
-InvalidOperationException: This component is already destroyed
-Game.Block.Interface.BlockException.CheckDestroy (Game.Block.Interface.Component.IBlockComponent blockComponent) (at Assets/Scripts/Game.Block.Interface/BlockException.cs:15)
-Game.Block.Blocks.Miner.VanillaMinerProcessorComponent.Update () (at Assets/Scripts/Game.Block/Blocks/Miner/VanillaMinerProcessorComponent.cs:120)
-Game.Block.Blocks.BlockSystem.Update () (at Assets/Scripts/Game.Block/Blocks/BlockSystem.cs:67)
-Game.Block.Blocks.BlockSystem.<.ctor>b__23_1 (UniRx.Unit _) (at Assets/Scripts/Game.Block/Blocks/BlockSystem.cs:50)
-UniRx.Observer+Subscribe`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/Observer.cs:165)
-UniRx.InternalUtil.ListObserver`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/InternalUtil/ListObserver.cs:39)
-UniRx.Subject`1[T].OnNext (T value) (at ./Library/PackageCache/com.neuecc.unirx@284d5c50d3/Subjects/Subject.cs:62)
-Core.Update.GameUpdater.Update () (at Assets/Scripts/Core.Update/GameUpdater.cs:20)
-ServerStarter.FixedUpdate () (at Assets/ServerStarter.cs:20)
-```
+# 概要
 
-関連クラス: GameUpdater
+MinecraftのLogicstcs pipeというmodをベースにしたオンデマンドクラフトシステム
+
+アイテムが注文されたときに、ロジスティクスパイプネットワークに登録されている機械を使用して中間素材を含むアイテムを次々と作成し、必要なアイテムを必要な量、必要なときにお届けするシステムである。
+
+このシステムは「ロジパイプネットワーク」を構築することで作成、稼働させることができる。
+
+ロジパイプネットワークはロジパイプを構築している一つの機械ネットワークである。このネットワークはノードが機械となり、そのリンクがアイテム輸送路となる。機械同士がアイテム輸送路でつながり、必要なアイテムを必要なだけ生産し、適切な機械に届けて加工を行うという役割を果たす。
+
+# ロジパイプネットワークの基本要素
+
+- ロジパイプコンピューター
+- ストレージ
+- 加工機械
+- ロジパイプ専用アイテム輸送路
+
+## ロジパイプコンピューター
+
+ロジパイプネットワークの中でアイテムの受注を請負い、現在のストレージに入っているアイテム量で足りるか、足りない素材はなにか、加工機械は足りているか、を判断し、どのアイテムをどの機械に輸送、加工すればいいかを判断する。
+
+また、完成したアイテムを受け取る場所にもなる。
+
+## ストレージ
+
+ロジパイプネットワークの中でアイテムの保存を行う。原材料の供給や、余った中間素材などを保存しておく。
+
+## 加工機械
+
+ロジパイプネットワークの中で、アイテムの加工を担当する。格納されたアイテムを下に、別のアイテムに加工して輸送路に流す。
+
+## ロジパイプ専用アイテム輸送路
+
+ロジスティクス・ネットワークを構築するためのアイテムの輸送路。輸送路内でアイテム同士が重なったり、並行交差はせず、一方通行となっている。そのため、最低限、センターコンソールを起点に上り輸送路と下り輸送路を用意し、それぞれのアイテム輸送路を繋ぐ必要がある。
+
+# 命令
+
+上記のロジパイプシステムを実現するために、 CraftChainTreeNode GetEnableCraftChainTree(CraftChainItem targetItem) を実装したいと思っています。
+
+
+ このメソッドはクラフトチェインのツリーを参考に、作れるクラフトチェインのツリーを探索し、返すメソッドです。
+
+ 探索の方法、条件は以下のとおりです。
+ - すべてのツリーの最下部まで探索し、必要なアイテムの種類と数を洗い出す。
+ - その過程で、中間素材があるのであれば、その中間素材を使うため、中間素材を作成するための原材料は不要である。
+ - 例えば A-1 <- B-1,C-2 と B-1 <- C-2 というレシピがあったときに、Aを1個作るためにはBが1個、Cが2個必要であり、Bを1個作るためにはCが2個必要となる。
+   - このとき、もし既にBが1個存在すれば、Aを作るための要求量はBが1個、Cが2個となる。
+   - もしBが存在しない場合、Aを作るためにはCが4個必要となる。
+ - もしD-1 <- E-8, E-4 <- F-2, E-4 <- G-2 というレシピの場合、Fが4個、Gが4個、Fが2個とGが2個あるときに作成が可能となる。
+
+これらの条件を満たすように、クラフトチェインツリーのチェックを実装したいです。
+ただし、そのアイテムが有るかどうかといった実装は今行う必要はありません。細かい実装物は後回しにして、まずはこのロジックを実現できるアルゴリズムを考え、そのアルゴリズムを落とし込んだコードを記述してください。
