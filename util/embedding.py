@@ -1,3 +1,4 @@
+import hashlib
 import json
 import numpy as np
 from openai import OpenAI
@@ -23,7 +24,9 @@ def update_embedding():
         is_checked = False
         for embedding in moorestech_embedding:
             # 相対パス、ファイル内容が一致していればスキップ
-            if embedding['relative_path'] == file['relative_path'] and embedding['content'] == file['content']:
+            embedding_sha256 = hashlib.sha256(embedding['content'].encode()).hexdigest()
+            file_sha256 = hashlib.sha256(file['content'].encode()).hexdigest()
+            if embedding['relative_path'] == file['relative_path'] and embedding_sha256 == file_sha256:
                 embedding['checked'] = True
                 is_checked = True
                 break

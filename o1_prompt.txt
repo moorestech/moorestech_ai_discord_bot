@@ -1,133 +1,3 @@
-moorestech_server/Assets/Scripts/Tests/UnitTest/Game/SaveLoad/MachineSaveLoadTest.cs
-```cs
-using System.Reflection;
-using Core.Master;
-using Core.Update;
-using Game.Block.Blocks.Machine;
-using Game.Block.Blocks.Machine.Inventory;
-using Game.Block.Interface;
-using Game.Block.Interface.Extension;
-using Game.Context;
-using Game.PlayerInventory;
-using Game.SaveLoad.Interface;
-using Game.SaveLoad.Json;
-using Game.World.Interface.DataStore;
-using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Server.Boot;
-using Tests.Module.TestMod;
-using UnityEngine;
-using Assert = UnityEngine.Assertions.Assert;
-
-namespace Tests.UnitTest.Game.SaveLoad
-{
-    public class MachineSaveLoadTest
-    {
-        //インベントリのあるブロックを追加した時のテスト
-        //レシピやブロックが変わった時はテストコードを修正してください
-        [Test]
-        public void InventoryBlockTest()
-        {
-            //機械の追加
-            var (blockFactory, worldBlockDatastore, _, assembleSaveJsonText, _) = CreateBlockTestModule();
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.MachineId , new Vector3Int(0, 0), BlockDirection.North, out var machineBlock);
-            var machineInventory = machineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
-            
-            
-            //レシピ用のアイテムを追加
-            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(1), 3));
-            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 1));
-            //処理を開始
-            GameUpdater.UpdateWithWait();
-            //別のアイテムを追加
-            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(5), 6));
-            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 4));
-            
-            //リフレクションで機械の状態を設定
-            //機械のレシピの残り時間設定
-            var vanillaMachineProcessor = machineBlock.GetComponent<VanillaMachineProcessorComponent>();
-            //ステータスをセット
-            typeof(VanillaMachineProcessorComponent)
-                .GetProperty("RemainingSecond")
-                .SetValue(vanillaMachineProcessor, 0.3);
-            typeof(VanillaMachineProcessorComponent)
-                .GetProperty("CurrentState")
-                .SetValue(vanillaMachineProcessor, ProcessState.Processing);
-            
-            //機械のアウトプットスロットの設定
-            var outputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
-                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(machineInventory);
-            
-            outputInventory.SetItem(1, itemStackFactory.Create(new ItemId(1), 1));
-            outputInventory.SetItem(2, itemStackFactory.Create(new ItemId(3), 2));
-            
-            //レシピIDを取得
-            var recipeId = vanillaMachineProcessor.RecipeGuid;
-            
-            var json = assembleSaveJsonText.AssembleSaveJson();
-            Debug.Log(json);
-            //配置したブロックを削除
-            worldBlockDatastore.RemoveBlock(new Vector3Int(0, 0));
-            
-            
-            //ロードした時に機械の状態が正しいことを確認
-            var (_, loadWorldBlockDatastore, _, _, loadJsonFile) = CreateBlockTestModule();
-            
-            loadJsonFile.Load(json);
-            
-            var loadMachineBlock = loadWorldBlockDatastore.GetBlock(new Vector3Int(0, 0));
-            
-            //ブロックID、intIDが同じであることを確認
-            Assert.AreEqual(machineBlock.BlockId, loadMachineBlock.BlockId);
-            Assert.AreEqual(machineBlock.BlockInstanceId, loadMachineBlock.BlockInstanceId);
-            
-            
-            //機械のレシピの残り時間のチェック
-            var machineProcessor = loadMachineBlock.GetComponent<VanillaMachineProcessorComponent>();
-            Assert.AreEqual(0.3, machineProcessor.RemainingSecond);
-            //レシピIDのチェック
-            Assert.AreEqual(recipeId, machineProcessor.RecipeGuid);
-            //機械のステータスのチェック
-            Assert.AreEqual(ProcessState.Processing, machineProcessor.CurrentState);
-            
-            
-            var loadMachineInventory = loadMachineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
-            //インプットスロットのチェック
-            var inputInventoryField = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
-                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(loadMachineInventory);
-            Assert.AreEqual(itemStackFactory.Create(new ItemId(5), 6), inputInventoryField.InputSlot[0]);
-            Assert.AreEqual(itemStackFactory.Create(new ItemId(2), 4), inputInventoryField.InputSlot[1]);
-            
-            //アウトプットスロットのチェック
-            var outputInventoryField = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
-                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(loadMachineInventory);
-            Assert.AreEqual(itemStackFactory.CreatEmpty(), outputInventoryField.OutputSlot[0]);
-            Assert.AreEqual(itemStackFactory.Create(new ItemId(1), 1), outputInventoryField.OutputSlot[1]);
-            Assert.AreEqual(itemStackFactory.Create(new ItemId(3), 2), outputInventoryField.OutputSlot[2]);
-        }
-        
-        private (IBlockFactory, IWorldBlockDatastore, PlayerInventoryDataStore, AssembleSaveJsonText, WorldLoaderFromJson)
-            CreateBlockTestModule()
-        {
-            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var blockFactory = ServerContext.BlockFactory;
-            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
-            var assembleSaveJsonText = serviceProvider.GetService<AssembleSaveJsonText>();
-            var playerInventoryDataStore = serviceProvider.GetService<PlayerInventoryDataStore>();
-            var loadJsonFile = serviceProvider.GetService<IWorldSaveDataLoader>() as WorldLoaderFromJson;
-            
-            return (blockFactory, worldBlockDatastore, playerInventoryDataStore, assembleSaveJsonText, loadJsonFile);
-        }
-    }
-}
-```
-
 moorestech_server/Assets/Scripts/Tests/UnitTest/Core/Other/ConnectingInventoryListPriorityInsertItemServiceTest.cs
 ```cs
 using System.Collections.Generic;
@@ -170,9 +40,9 @@ namespace Tests.UnitTest.Core.Other
             var componentPos = new BlockPositionInfo(Vector3Int.zero, BlockDirection.North, Vector3Int.one);
             var inputConnectorComponent = new BlockConnectorComponent<IBlockInventory>(null, null, componentPos);
             
-            var targets = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)inputConnectorComponent.ConnectedTargets;
+            var targets = (Dictionary<IBlockInventory, ConnectedInfo>)inputConnectorComponent.ConnectedTargets;
             
-            foreach (var inventory in inventoryList) targets.Add(inventory, (null, null));
+            foreach (var inventory in inventoryList) targets.Add(inventory, new ConnectedInfo());
             
             var service = new ConnectingInventoryListPriorityInsertItemService(inputConnectorComponent);
             
@@ -185,1233 +55,6 @@ namespace Tests.UnitTest.Core.Other
             Assert.AreEqual(itemStackFactory.Create(new ItemId(2), 3), inventory2.InsertedItems[0]);
             Assert.AreEqual(itemStackFactory.Create(new ItemId(3), 2), inventory3.InsertedItems[0]);
             Assert.AreEqual(itemStackFactory.Create(new ItemId(4), 1), inventory2.InsertedItems[1]);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/UnitTest/Game/SaveLoad/GearMachineSaveLoadTest.cs
-```cs
-using System.Reflection;
-using Core.Master;
-using Core.Update;
-using Game.Block.Blocks.Gear;
-using Game.Block.Blocks.Machine;
-using Game.Block.Blocks.Machine.Inventory;
-using Game.Block.Interface;
-using Game.Block.Interface.Extension;
-using Game.Context;
-using Game.Gear.Common;
-using Game.PlayerInventory;
-using Game.SaveLoad.Interface;
-using Game.SaveLoad.Json;
-using Game.World.Interface.DataStore;
-using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Server.Boot;
-using Tests.Module.TestMod;
-using UnityEngine;
-
-namespace Tests.UnitTest.Game.SaveLoad
-{
-    public class GearMachineSaveLoadTest
-    {
-        //ギア機械のインベントリのあるブロックを追加した時のテスト
-        //レシピやブロックが変わった時はテストコードを修正してください
-        [Test]
-        public void InventoryBlockTest()
-        {
-            //機械の追加
-            var (blockFactory, worldBlockDatastore, _, assembleSaveJsonText, _) = CreateBlockTestModule();
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.GearMachine, new Vector3Int(0, 0), BlockDirection.North, out var gearMachineBlock);
-            var machineInventory = gearMachineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
-            
-            
-            //レシピ用のアイテムを追加
-            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(1), 3));
-            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 1));
-            
-            //処理を開始
-            gearMachineBlock.GetComponent<GearEnergyTransformer>().SupplyPower(new RPM(1000), new Torque(1000), true);
-            GameUpdater.UpdateWithWait();
-            //別のアイテムを追加
-            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(5), 6));
-            machineInventory.InsertItem(itemStackFactory.Create(new ItemId(2), 4));
-            
-            //リフレクションで機械の状態を設定
-            //機械のレシピの残り時間設定
-            var vanillaMachineProcessor = gearMachineBlock.GetComponent<VanillaMachineProcessorComponent>();
-            //ステータスをセット
-            typeof(VanillaMachineProcessorComponent)
-                .GetProperty("RemainingSecond")
-                .SetValue(vanillaMachineProcessor, 0.3);
-            typeof(VanillaMachineProcessorComponent)
-                .GetProperty("CurrentState")
-                .SetValue(vanillaMachineProcessor, ProcessState.Processing);
-            
-            //機械のアウトプットスロットの設定
-            var outputInventory = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
-                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(machineInventory);
-            
-            outputInventory.SetItem(1, itemStackFactory.Create(new ItemId(1), 1));
-            outputInventory.SetItem(2, itemStackFactory.Create(new ItemId(3), 2));
-            
-            //レシピIDを取得
-            var recipeId = vanillaMachineProcessor.RecipeGuid;
-            
-            var json = assembleSaveJsonText.AssembleSaveJson();
-            Debug.Log(json);
-            //配置したブロックを削除
-            worldBlockDatastore.RemoveBlock(new Vector3Int(0, 0));
-            
-            
-            //ロードした時に機械の状態が正しいことを確認
-            var (_, loadWorldBlockDatastore, _, _, loadJsonFile) = CreateBlockTestModule();
-            
-            loadJsonFile.Load(json);
-            
-            var loadMachineBlock = loadWorldBlockDatastore.GetBlock(new Vector3Int(0, 0));
-            
-            //ブロックID、intIDが同じであることを確認
-            Assert.AreEqual(gearMachineBlock.BlockId, loadMachineBlock.BlockId);
-            Assert.AreEqual(gearMachineBlock.BlockInstanceId, loadMachineBlock.BlockInstanceId);
-            
-            
-            //機械のレシピの残り時間のチェック
-            var machineProcessor = loadMachineBlock.GetComponent<VanillaMachineProcessorComponent>();
-            Assert.AreEqual(0.3, machineProcessor.RemainingSecond);
-            //レシピIDのチェック
-            Assert.AreEqual(recipeId, machineProcessor.RecipeGuid);
-            //機械のステータスのチェック
-            Assert.AreEqual(ProcessState.Processing, machineProcessor.CurrentState);
-            
-            
-            var loadMachineInventory = loadMachineBlock.GetComponent<VanillaMachineBlockInventoryComponent>();
-            //インプットスロットのチェック
-            var inputInventoryField = (VanillaMachineInputInventory)typeof(VanillaMachineBlockInventoryComponent)
-                .GetField("_vanillaMachineInputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(loadMachineInventory);
-            Assert.AreEqual(itemStackFactory.Create(new ItemId(5), 6), inputInventoryField.InputSlot[0]);
-            Assert.AreEqual(itemStackFactory.Create(new ItemId(2), 4), inputInventoryField.InputSlot[1]);
-            
-            //アウトプットスロットのチェック
-            var outputInventoryField = (VanillaMachineOutputInventory)typeof(VanillaMachineBlockInventoryComponent)
-                .GetField("_vanillaMachineOutputInventory", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(loadMachineInventory);
-            Assert.AreEqual(itemStackFactory.CreatEmpty(), outputInventoryField.OutputSlot[0]);
-            Assert.AreEqual(itemStackFactory.Create(new ItemId(1), 1), outputInventoryField.OutputSlot[1]);
-            Assert.AreEqual(itemStackFactory.Create(new ItemId(3), 2), outputInventoryField.OutputSlot[2]);
-        }
-        
-        private (IBlockFactory, IWorldBlockDatastore, PlayerInventoryDataStore, AssembleSaveJsonText, WorldLoaderFromJson)
-            CreateBlockTestModule()
-        {
-            var (packet, serviceProvider) =
-                new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var blockFactory = ServerContext.BlockFactory;
-            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
-            var assembleSaveJsonText = serviceProvider.GetService<AssembleSaveJsonText>();
-            var playerInventoryDataStore = serviceProvider.GetService<PlayerInventoryDataStore>();
-            var loadJsonFile = serviceProvider.GetService<IWorldSaveDataLoader>() as WorldLoaderFromJson;
-            
-            return (blockFactory, worldBlockDatastore, playerInventoryDataStore, assembleSaveJsonText, loadJsonFile);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/CombinedTest/Server/CollectBeltConveyorItemsTest.cs
-```cs
-using System;
-using System.Collections.Generic;
-using System.Reflection;
-using Core.Item.Interface;
-using Core.Master;
-using Core.Update;
-using Game.Block.Blocks.BeltConveyor;
-using Game.Block.Interface;
-using Game.Block.Interface.Extension;
-using Game.Context;
-using Game.Entity.Interface;
-using Game.World.Interface.DataStore;
-using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Server.Boot;
-using Server.Protocol.PacketResponse.Util;
-using Tests.Module.TestMod;
-using UnityEngine;
-
-namespace Tests.CombinedTest.Server
-{
-    public class CollectBeltConveyorItemsTest
-    {
-        //4秒で入って出るベルトコンベアで残り1秒で出る時の座標が正しいかどうかをテストする
-        private const double RemainingTime = 0.5;
-        private const int ItemInstanceId = 100;
-        
-        private readonly List<Vector2Int> _plusPlayerCoordinate = new() { new Vector2Int(0, 0) };
-        
-        /// <summary>
-        ///     各方向に向いたベルトコンベア内のアイテムの位置が正しいかどうかをチェックする
-        /// </summary>
-        [Test]
-        public void BlockDirectionItemPositionTest()
-        {
-            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            var worldDataStore = ServerContext.WorldBlockDatastore;
-            var entityFactory = serviceProvider.GetService<IEntityFactory>();
-            
-            //x,yがともにプラスの時のテスト 
-            
-            //北向きに設置
-            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.North, worldDataStore);
-            
-            //エンティティを取得
-            var itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
-            //座標を検証
-            const float defaultY = VanillaBeltConveyorComponent.DefaultBeltConveyorHeight;
-            Assert.AreEqual(0.5, itemEntity.Position.x); //0,0に設置してベルトコンベアの中心にアイテムがあるため、Z座標は0.5となる 
-            Assert.AreEqual(defaultY, itemEntity.Position.y); //2次元座標から3次元座標に変換されているため、Y座標は0となる
-            Assert.AreEqual(0.75, itemEntity.Position.z); //4秒のベルトコンベアで残り1秒の時の座標のため、1の3/4の位置にある
-            //エンティティを検証
-            Assert.AreEqual(ItemInstanceId, itemEntity.InstanceId.AsPrimitive());
-            Assert.AreEqual(VanillaEntityType.VanillaItem, itemEntity.EntityType);
-            
-            
-            //東向きに設置
-            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
-            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.East, worldDataStore);
-            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
-            //座標を検証
-            Assert.AreEqual(0.75, itemEntity.Position.x);
-            Assert.AreEqual(defaultY, itemEntity.Position.y);
-            Assert.AreEqual(0.5, itemEntity.Position.z);
-            
-            
-            //ブロックを削除し南向きに設置
-            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
-            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.South, worldDataStore);
-            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
-            //座標を検証
-            Assert.AreEqual(0.5, itemEntity.Position.x);
-            Assert.AreEqual(defaultY, itemEntity.Position.y);
-            Assert.AreEqual(0.25, itemEntity.Position.z);
-            
-            
-            //ブロックを削除し西向きに設置
-            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
-            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.West, worldDataStore);
-            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
-            //ブロックを削除し座標を検証
-            Assert.AreEqual(0.25, itemEntity.Position.x);
-            Assert.AreEqual(defaultY, itemEntity.Position.y);
-            Assert.AreEqual(0.5, itemEntity.Position.z);
-            
-            
-            //x、yがマイナスであるときのテスト
-            //北向きに設
-            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
-            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.North, worldDataStore);
-            
-            //エンティティを取得
-            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
-            //座標を検証
-            Assert.AreEqual(-0.5, itemEntity.Position.x);
-            Assert.AreEqual(defaultY, itemEntity.Position.y);
-            Assert.AreEqual(-0.25, itemEntity.Position.z); //ブロックの座標がマイナスなので-1を原点として3/4の値である-0.25となる
-            
-            
-            //東向きに設置
-            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
-            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.East, worldDataStore);
-            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
-            //座標を検証
-            Assert.AreEqual(-0.25, itemEntity.Position.x);
-            Assert.AreEqual(defaultY, itemEntity.Position.y);
-            Assert.AreEqual(-0.5, itemEntity.Position.z);
-            
-            
-            //ブロックを削除し南向きに設置
-            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
-            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.South, worldDataStore);
-            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
-            //座標を検証
-            Assert.AreEqual(-0.5, itemEntity.Position.x);
-            Assert.AreEqual(defaultY, itemEntity.Position.y);
-            Assert.AreEqual(-0.75, itemEntity.Position.z);
-            
-            
-            //ブロックを削除し西向きに設置
-            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
-            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.West, worldDataStore);
-            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
-            //ブロックを削除し座標を検証
-            Assert.AreEqual(-0.75, itemEntity.Position.x);
-            Assert.AreEqual(defaultY, itemEntity.Position.y);
-            Assert.AreEqual(-0.5, itemEntity.Position.z);
-        }
-        
-        
-        /// <summary>
-        ///     ベルトコンベアから別のベルトコンベアに移ってもInstanceIdは変化しないことをテスト
-        /// </summary>
-        [Test]
-        public void ItemInstanceIdTest()
-        {
-            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var worldDataStore = ServerContext.WorldBlockDatastore;
-            
-            worldDataStore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, new Vector3Int(0, 0, 1), BlockDirection.North, out var belt2);
-            //二つのベルトコンベアを繋がるように設置
-            
-            var belt1 = CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.North, worldDataStore);
-            
-            //4秒間アップデートする
-            var now = DateTime.Now;
-            while (DateTime.Now - now < TimeSpan.FromSeconds(RemainingTime * 1.1)) GameUpdater.UpdateWithWait();
-            
-            //ベルトコンベアからアイテムを取得
-            var inventoryItemsField = typeof(VanillaBeltConveyorComponent).GetField("_inventoryItems", BindingFlags.NonPublic | BindingFlags.Instance);
-            var inventory2Items = (BeltConveyorInventoryItem[])inventoryItemsField.GetValue(belt2.GetComponent<VanillaBeltConveyorComponent>());
-            
-            //InstanceIdが変化していないことを検証
-            Assert.AreEqual(ItemInstanceId, inventory2Items[3].ItemInstanceId.AsPrimitive());
-        }
-        
-        
-        private IBlock CreateOneItemInsertedItem(Vector3Int pos, BlockDirection blockDirection, IWorldBlockDatastore datastore)
-        {
-            datastore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, pos, blockDirection, out var beltConveyor);
-            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
-            
-            //リフレクションで_inventoryItemsを取得
-            var inventoryItemsField = typeof(VanillaBeltConveyorComponent).GetField("_inventoryItems", BindingFlags.NonPublic | BindingFlags.Instance);
-            var inventoryItems = (BeltConveyorInventoryItem[])inventoryItemsField.GetValue(beltConveyorComponent);
-            
-            inventoryItems[0] = new BeltConveyorInventoryItem(new ItemId(1), new ItemInstanceId(ItemInstanceId));
-            inventoryItems[1] = null;
-            inventoryItems[2] = null;
-            inventoryItems[3] = null;
-            
-            inventoryItems[0].RemainingPercent = 0.25f;
-            
-            return beltConveyor;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/CombinedTest/Game/BeltConveyorInsertTest.cs
-```cs
-using System;
-using Core.Master;
-using Core.Update;
-using Game.Block.Blocks.Chest;
-using Game.Block.Interface;
-using Game.Block.Interface.Extension;
-using Game.Context;
-using NUnit.Framework;
-using Server.Boot;
-using Tests.Module.TestMod;
-using UnityEngine;
-
-namespace Tests.CombinedTest.Game
-{
-    public class BeltConveyorInsertTest
-    {
-        //2つのアイテムがチェストから出されてベルトコンベアに入り、全てチェストに入るテスト
-        [Test]
-        public void TwoItemIoTest()
-        {
-            var (_, saveServiceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
-            
-            //それぞれを設置
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.ChestId, Vector3Int.zero, BlockDirection.North, out var inputChest);
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, new Vector3Int(0, 0, 1), BlockDirection.North, out var beltConveyor);
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.ChestId, new Vector3Int(0, 0, 2), BlockDirection.North, out var outputChest);
-            
-            //インプットチェストにアイテムを2つ入れる
-            var inputChestComponent = inputChest.GetComponent<VanillaChestComponent>();
-            inputChestComponent.SetItem(0, new ItemId(1), 2);
-            
-            //ベルトコンベアのアイテムが出てから入るまでの6秒間アップデートする
-            var now = DateTime.Now;
-            while (DateTime.Now - now < TimeSpan.FromSeconds(5)) GameUpdater.UpdateWithWait();
-            
-            //アイテムが出ているか確認
-            Assert.AreEqual(0, inputChestComponent.GetItem(0).Count);
-            //アイテムが入っているか確認
-            var outputChestComponent = outputChest.GetComponent<VanillaChestComponent>();
-            Assert.AreEqual(2, outputChestComponent.GetItem(0).Count);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/BeltConveyorTest.cs
-```cs
-using System;
-using System.Collections.Generic;
-using Core.Master;
-using Core.Update;
-using Game.Block.Blocks.BeltConveyor;
-using Game.Block.Component;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Block.Interface.Extension;
-using Game.Context;
-using Mooresmaster.Model.BlockConnectInfoModule;
-using Mooresmaster.Model.BlocksModule;
-using NUnit.Framework;
-using Server.Boot;
-using Tests.Module;
-using Tests.Module.TestMod;
-using UnityEngine;
-using Random = System.Random;
-
-namespace Tests.CombinedTest.Core
-{
-    /// <summary>
-    ///     コンフィグが変わったらこのテストを変更に応じて変更してください
-    /// </summary>
-    public class BeltConveyorTest
-    {
-        //一定個数以上アイテムが入らないテストした後、正しく次に出力されるかのテスト
-        [Test]
-        public void FullInsertAndChangeConnectorBeltConveyorTest()
-        {
-            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            
-            var random = new Random(4123);
-            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
-            {
-                var id = new ItemId(random.Next(0, 10));
-                
-                var item = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount + 1);
-                var beltConveyor = ServerContext.BlockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
-                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
-                
-                var endTime = DateTime.Now.AddSeconds(beltConveyorParam.TimeOfItemEnterToExit);
-                
-                while (DateTime.Now < endTime.AddSeconds(0.1))
-                {
-                    item = beltConveyorComponent.InsertItem(item);
-                    GameUpdater.UpdateWithWait();
-                }
-                
-                Assert.AreEqual(item.Count, 1);
-                
-                var dummy = new DummyBlockInventory();
-                
-                var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
-                connectInventory.Add(dummy, (null, null));
-                GameUpdater.UpdateWithWait();
-                
-                Assert.AreEqual(itemStackFactory.Create(id, 1).ToString(), dummy.InsertedItems[0].ToString());
-            }
-        }
-        
-        //一個のアイテムが入って正しく搬出されるかのテスト
-        [Test]
-        public void InsertBeltConveyorTest()
-        {
-            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
-            var blockFactory = ServerContext.BlockFactory;
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            
-            
-            var id = new ItemId(2);
-            const int count = 3;
-            var item = itemStackFactory.Create(id, count);
-            var dummy = new DummyBlockInventory();
-            
-            // アイテムを挿入
-            var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
-            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
-            
-            var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
-            connectInventory.Add(dummy, (null, null));
-            
-            var expectedEndTime = DateTime.Now.AddSeconds(beltConveyorParam.TimeOfItemEnterToExit);
-            var outputItem = beltConveyorComponent.InsertItem(item);
-            
-            //5秒以上経過したらループを抜ける 
-            while (!dummy.IsItemExists) GameUpdater.UpdateWithWait();
-            
-            
-            //チェック
-            Assert.True(DateTime.Now <= expectedEndTime.AddSeconds(0.1));
-            Assert.True(expectedEndTime.AddSeconds(-0.1) <= DateTime.Now);
-            
-            Debug.Log($"{(DateTime.Now - expectedEndTime).TotalSeconds}");
-            
-            Assert.True(outputItem.Equals(itemStackFactory.Create(id, count - 1)));
-            var tmp = itemStackFactory.Create(id, 1);
-            Debug.Log($"{tmp} {dummy.InsertedItems[0]}");
-            Assert.AreEqual(tmp.ToString(), dummy.InsertedItems[0].ToString());
-        }
-        
-        //ベルトコンベアのインベントリをフルにするテスト
-        [Test]
-        public void FullInsertBeltConveyorTest()
-        {
-            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
-            var blockFactory = ServerContext.BlockFactory;
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            
-            var random = new Random(4123);
-            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
-            {
-                var id = new ItemId(random.Next(1, 11));
-                var item = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount + 1);
-                var dummy = new DummyBlockInventory(beltConveyorParam.BeltConveyorItemCount);
-                var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
-                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
-                
-                var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
-                connectInventory.Add(dummy, (null, null));
-                
-                while (!dummy.IsItemExists)
-                {
-                    item = beltConveyorComponent.InsertItem(item);
-                    GameUpdater.UpdateWithWait();
-                }
-                
-                Assert.True(item.Equals(itemStackFactory.Create(id, 0)));
-                var tmp = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount);
-                Assert.True(dummy.InsertedItems[0].Equals(tmp));
-            }
-        }
-        
-        //二つのアイテムが入ったとき、一方しか入らないテスト
-        [Test]
-        public void Insert2ItemBeltConveyorTest()
-        {
-            var (_, serviceProvider) =
-                new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            var blockFactory = ServerContext.BlockFactory;
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            
-            var random = new Random(4123);
-            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
-            {
-                //必要な変数を作成
-                var item1 = itemStackFactory.Create(new ItemId(random.Next(1, 11)), random.Next(1, 10));
-                var item2 = itemStackFactory.Create(new ItemId(random.Next(1, 11)), random.Next(1, 10));
-                
-                var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId , new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
-                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
-                
-                var item1Out = beltConveyorComponent.InsertItem(item1);
-                var item2Out = beltConveyorComponent.InsertItem(item2);
-                
-                Assert.True(item1Out.Equals(item1.SubItem(1)));
-                Assert.True(item2Out.Equals(item2));
-            }
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/GearBeltConveyorTest.cs
-```cs
-using System;
-using System.Collections.Generic;
-using Core.Master;
-using Core.Update;
-using Game.Block.Blocks.BeltConveyor;
-using Game.Block.Component;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Block.Interface.Extension;
-using Game.Context;
-using Game.Gear.Common;
-using Microsoft.Extensions.DependencyInjection;
-using Mooresmaster.Model.BlockConnectInfoModule;
-using Mooresmaster.Model.BlocksModule;
-using NUnit.Framework;
-using Server.Boot;
-using Tests.Module;
-using Tests.Module.TestMod;
-using UnityEngine;
-
-namespace Tests.CombinedTest.Core
-{
-    public class GearBeltConveyorTest
-    {
-        // トルクの供給率が100%のとき、指定した時間でアイテムが出てくるテスト
-        [Test]
-        public void OutputTestWhenTorqueSuppliedRateIs100()
-        {
-            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
-            
-            const int id = 2;
-            const int count = 3;
-            var item = itemStackFactory.Create(new ItemId(id), count);
-            var dummy = new DummyBlockInventory();
-            
-            
-            // gearBeltConveyorブロックを生成
-            var gearBeltConveyorPosition = new Vector3Int(0, 0, 0);
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.GearBeltConveyor, gearBeltConveyorPosition, BlockDirection.North, out var gearBeltConveyor);
-            var beltConveyorComponent = gearBeltConveyor.GetComponent<VanillaBeltConveyorComponent>();
-            var connectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)gearBeltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
-            connectInventory.Add(dummy, (null, null));
-            
-            // generatorブロックを作成
-            var generatorPosition = new Vector3Int(1, 0, 0);
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.East, out var generator);
-            
-            // testGearブロックを作成
-            var testGearPosition = new Vector3Int(2, 0, 0);
-            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, testGearPosition, BlockDirection.East, out var testGear);
-            
-            var gearNetworkDatastore = serviceProvider.GetService<GearNetworkDatastore>();
-            IReadOnlyDictionary<GearNetworkId, GearNetwork> gearNetwork = gearNetworkDatastore.GearNetworks;
-            
-            
-            const int torqueRate = 1;
-            const int generatorRpm = 10;
-            var gearBeltConveyorBlockParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.GearBeltConveyor).BlockParam as GearBeltConveyorBlockParam;
-            var duration = 1f / (generatorRpm * torqueRate * gearBeltConveyorBlockParam.BeltConveyorSpeed);
-            var expectedEndTime = DateTime.Now.AddSeconds(duration);
-            var startTime = DateTime.Now;
-            beltConveyorComponent.InsertItem(item);
-            
-            // for (var i = 0; i < 100; i++)
-            // {
-            //     GameUpdater.UpdateWithWait();
-            // }
-            var c = 0;
-            while (!dummy.IsItemExists)
-            {
-                c++;
-                GameUpdater.UpdateWithWait();
-                var elapsed = DateTime.Now - startTime;
-                if (elapsed.TotalSeconds > 20) Assert.Fail();
-            }
-            
-            Assert.True(dummy.IsItemExists);
-            
-            var now = DateTime.Now;
-            Debug.Log($"{now} {expectedEndTime}\n{(now - startTime).TotalSeconds}\n{(expectedEndTime - now).TotalSeconds}\n{duration}\n{c}");
-            Assert.True(now <= expectedEndTime.AddSeconds(0.4));
-            Assert.True(expectedEndTime.AddSeconds(-0.4) <= now);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/ItemShooter/ItemShooterComponent.cs
-```cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Core.Item.Interface;
-using Core.Master;
-using Core.Update;
-using Game.Block.Blocks.BeltConveyor;
-using Game.Block.Component;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Context;
-using Mooresmaster.Model.BlocksModule;
-using Newtonsoft.Json;
-using UnityEngine;
-
-namespace Game.Block.Blocks.ItemShooter
-{
-    public class ItemShooterComponent : IItemCollectableBeltConveyor, IBlockInventory, IBlockSaveState, IUpdatableBlockComponent
-    {
-        public BeltConveyorSlopeType SlopeType { get; }
-        public IReadOnlyList<IOnBeltConveyorItem> BeltConveyorItems => _inventoryItems;
-        private readonly ShooterInventoryItem[] _inventoryItems;
-        
-        private readonly BlockConnectorComponent<IBlockInventory> _blockConnectorComponent;
-        private readonly ItemShooterBlockParam _itemShooterBlockParam;
-        private const float InsertItemInterval = 1f; // TODO to master
-        
-        private float _lastInsertElapsedTime;
-        
-        public ItemShooterComponent(BlockConnectorComponent<IBlockInventory> blockConnectorComponent, ItemShooterBlockParam itemShooterBlockParam)
-        {
-            _blockConnectorComponent = blockConnectorComponent;
-            _itemShooterBlockParam = itemShooterBlockParam;
-            SlopeType = itemShooterBlockParam.SlopeType switch
-            {
-                ItemShooterBlockParam.SlopeTypeConst.Up => BeltConveyorSlopeType.Up,
-                ItemShooterBlockParam.SlopeTypeConst.Down => BeltConveyorSlopeType.Down,
-                ItemShooterBlockParam.SlopeTypeConst.Straight => BeltConveyorSlopeType.Straight
-            };
-            
-            _inventoryItems = new ShooterInventoryItem[_itemShooterBlockParam.InventoryItemNum];
-        }
-        
-        public ItemShooterComponent(string state, BlockConnectorComponent<IBlockInventory> blockConnectorComponent, ItemShooterBlockParam itemShooterBlockParam) :
-            this(blockConnectorComponent, itemShooterBlockParam)
-        {
-            if (state == string.Empty) return;
-            
-            List<ItemShooterItemJsonObject> items = JsonConvert.DeserializeObject<List<ItemShooterItemJsonObject>>(state);
-            for (var i = 0; i < items.Count; i++)
-            {
-                var item = items[i];
-                if (item.ItemStackSave == null) continue;
-                
-                var id = MasterHolder.ItemMaster.GetItemId(item.ItemStackSave.ItemGuid);
-                _inventoryItems[i] = new ShooterInventoryItem(id, ItemInstanceId.Create(), (float)item.CurrentSpeed)
-                {
-                    RemainingPercent = (float)items[i].RemainingPercent
-                };
-            }
-        }
-        
-        public void Update()
-        {
-            BlockException.CheckDestroy(this);
-            
-            _lastInsertElapsedTime += (float)GameUpdater.UpdateSecondTime;
-            var count = _inventoryItems.Length;
-            
-            for (var i = 0; i < count; i++)
-            {
-                var item = _inventoryItems[i];
-                if (item == null) continue;
-                
-                if (item.RemainingPercent <= 0)
-                {
-                    var insertItem = ServerContext.ItemStackFactory.Create(item.ItemId, 1, item.ItemInstanceId);
-                    
-                    if (_blockConnectorComponent.ConnectedTargets.Count == 0) continue;
-                    
-                    var connector = _blockConnectorComponent.ConnectedTargets.First();
-                    var target = connector.Key;
-                    if (target is ItemShooterComponent shooter)
-                    {
-                        _inventoryItems[i] = shooter.InsertItemFromShooter(item);
-                    }
-                    else
-                    {
-                        var output = connector.Key.InsertItem(insertItem);
-                        
-                        //渡した結果がnullItemだったらそのアイテムを消す
-                        if (output.Id == ItemMaster.EmptyItemId) _inventoryItems[i] = null;
-                    }
-                    
-                    continue;
-                }
-                
-                //時間を減らす
-                var deltaTime = (float)GameUpdater.UpdateSecondTime; // floatとdobuleが混在しているの気持ち悪いから改善したい
-                item.RemainingPercent -= deltaTime * _itemShooterBlockParam.ItemShootSpeed * item.CurrentSpeed;
-                item.RemainingPercent = Math.Clamp(item.RemainingPercent, 0, 1);
-                
-                // velocityを更新する
-                item.CurrentSpeed += _itemShooterBlockParam.Acceleration * deltaTime;
-                item.CurrentSpeed = Mathf.Clamp(item.CurrentSpeed, 0, float.MaxValue);
-            }
-        }
-        
-        private ShooterInventoryItem InsertItemFromShooter(ShooterInventoryItem inventoryItem)
-        {
-            BlockException.CheckDestroy(this);
-            
-            for (var i = 0; i < _inventoryItems.Length; i++)
-            {
-                if (_inventoryItems[i] != null) continue;
-                
-                _inventoryItems[i] = inventoryItem;
-                _inventoryItems[i].RemainingPercent = 1;
-                return null;
-            }
-            
-            return inventoryItem;
-        }
-        
-        public IItemStack InsertItem(IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            // インサート間隔をチェック
-            if (_lastInsertElapsedTime < InsertItemInterval) return itemStack;
-            
-            // インサート可能なスロットに挿入
-            for (var i = 0; i < _inventoryItems.Length; i++)
-            {
-                if (_inventoryItems[i] != null) continue;
-                
-                _inventoryItems[i] = new ShooterInventoryItem(itemStack.Id, itemStack.ItemInstanceId, _itemShooterBlockParam.InitialShootSpeed);
-                //挿入したのでアイテムを減らして返す
-                _lastInsertElapsedTime = 0;
-                return itemStack.SubItem(1);
-            }
-            
-            return itemStack;
-        }
-        
-        public IItemStack GetItem(int slot)
-        {
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            var item = _inventoryItems[slot];
-            return item == null ? itemStackFactory.CreatEmpty() : itemStackFactory.Create(item.ItemId, 1, item.ItemInstanceId);
-        }
-        
-        public void SetItem(int slot, IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            _inventoryItems[slot] = new ShooterInventoryItem(itemStack.Id, itemStack.ItemInstanceId, _itemShooterBlockParam.InitialShootSpeed);
-        }
-        
-        public int GetSlotSize()
-        {
-            BlockException.CheckDestroy(this);
-            return _inventoryItems.Length;
-        }
-        
-        public bool IsDestroy { get; private set; }
-        
-        public void Destroy()
-        {
-            IsDestroy = true;
-        }
-        
-        public string GetSaveState()
-        {
-            BlockException.CheckDestroy(this);
-            var items = _inventoryItems.Select(item => new ItemShooterItemJsonObject(item)).ToList();
-            return JsonConvert.SerializeObject(items);
-        }
-    }
-    
-    public class ItemShooterItemJsonObject
-    {
-        [JsonProperty("itemStack")] public ItemStackSaveJsonObject ItemStackSave;
-        
-        [JsonProperty("remainingTime")] public double RemainingPercent;
-        
-        [JsonProperty("currentSpeed")] public double CurrentSpeed;
-        
-        public ItemShooterItemJsonObject(ShooterInventoryItem shooterInventoryItem)
-        {
-            if (shooterInventoryItem == null)
-            {
-                ItemStackSave = null;
-                RemainingPercent = 0;
-                CurrentSpeed = 0;
-                return;
-            }
-            
-            var item = ServerContext.ItemStackFactory.Create(shooterInventoryItem.ItemId, 1);
-            ItemStackSave = new ItemStackSaveJsonObject(item);
-            RemainingPercent = shooterInventoryItem.RemainingPercent;
-            CurrentSpeed = shooterInventoryItem.CurrentSpeed;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Factory/BlockTemplate/VanillaBeltConveyorTemplate.cs
-```cs
-using System.Collections.Generic;
-using Game.Block.Blocks;
-using Game.Block.Blocks.BeltConveyor;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Mooresmaster.Model.BlocksModule;
-
-namespace Game.Block.Factory.BlockTemplate
-{
-    public class VanillaBeltConveyorTemplate : IBlockTemplate
-    {
-        public const string Hueru = "gear belt conveyor hueru";
-        public const string Kieru = "gear belt conveyor kieru";
-        
-        public IBlock New(BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
-        {
-            return GetBlock(null, blockMasterElement, blockInstanceId, blockPositionInfo);
-        }
-        
-        public IBlock Load(string state, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
-        {
-            //TODo UP bletからの入力を受付?
-            return GetBlock(state, blockMasterElement, blockInstanceId, blockPositionInfo);
-        }
-        
-        private BlockSystem GetBlock(string state, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
-        {
-            var beltParam = blockMasterElement.BlockParam as BeltConveyorBlockParam;
-            var blockName = blockMasterElement.Name;
-            
-            var slopeType = beltParam.SlopeType switch
-            {
-                ItemShooterBlockParam.SlopeTypeConst.Up => BeltConveyorSlopeType.Up,
-                ItemShooterBlockParam.SlopeTypeConst.Down => BeltConveyorSlopeType.Down,
-                ItemShooterBlockParam.SlopeTypeConst.Straight => BeltConveyorSlopeType.Straight
-            };
-            var connectorComponent = BlockTemplateUtil.CreateInventoryConnector(beltParam.InventoryConnectors, blockPositionInfo);
-            var beltComponent = state == null ? 
-                new VanillaBeltConveyorComponent(beltParam.BeltConveyorItemCount, beltParam.TimeOfItemEnterToExit, connectorComponent, blockName, slopeType) : 
-                new VanillaBeltConveyorComponent(state, beltParam.BeltConveyorItemCount, beltParam.TimeOfItemEnterToExit, connectorComponent, blockName, slopeType);
-            
-            
-            var components = new List<IBlockComponent>
-            {
-                beltComponent,
-                connectorComponent
-            };
-            
-            return new BlockSystem(blockInstanceId, blockMasterElement.BlockGuid, components, blockPositionInfo);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/Inventory/VanillaMachineBlockInventoryComponent.cs
-```cs
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using Core.Item.Interface;
-using Core.Master;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Context;
-
-namespace Game.Block.Blocks.Machine.Inventory
-{
-    public class VanillaMachineBlockInventoryComponent : IOpenableBlockInventoryComponent
-    {
-        public IReadOnlyList<IItemStack> InventoryItems
-        {
-            get
-            {
-                BlockException.CheckDestroy(this);
-                var items = new List<IItemStack>();
-                items.AddRange(_vanillaMachineInputInventory.InputSlot);
-                items.AddRange(_vanillaMachineOutputInventory.OutputSlot);
-                return items;
-            }
-        }
-        
-        private readonly VanillaMachineInputInventory _vanillaMachineInputInventory;
-        private readonly VanillaMachineOutputInventory _vanillaMachineOutputInventory;
-        
-        public VanillaMachineBlockInventoryComponent(VanillaMachineInputInventory vanillaMachineInputInventory, VanillaMachineOutputInventory vanillaMachineOutputInventory)
-        {
-            _vanillaMachineInputInventory = vanillaMachineInputInventory;
-            _vanillaMachineOutputInventory = vanillaMachineOutputInventory;
-        }
-        
-        public IItemStack ReplaceItem(int slot, ItemId itemId, int count)
-        {
-            BlockException.CheckDestroy(this);
-            
-            var item = ServerContext.ItemStackFactory.Create(itemId, count);
-            return ReplaceItem(slot, item);
-        }
-        
-        public IItemStack InsertItem(IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            //アイテムをインプットスロットに入れた後、プロセス開始できるなら開始
-            var item = _vanillaMachineInputInventory.InsertItem(itemStack);
-            return item;
-        }
-        
-        public IItemStack InsertItem(ItemId itemId, int count)
-        {
-            BlockException.CheckDestroy(this);
-            
-            var item = ServerContext.ItemStackFactory.Create(itemId, count);
-            return _vanillaMachineInputInventory.InsertItem(item);
-        }
-        
-        public IItemStack GetItem(int slot)
-        {
-            BlockException.CheckDestroy(this);
-            
-            if (slot < _vanillaMachineInputInventory.InputSlot.Count)
-                return _vanillaMachineInputInventory.InputSlot[slot];
-            
-            slot -= _vanillaMachineInputInventory.InputSlot.Count;
-            return _vanillaMachineOutputInventory.OutputSlot[slot];
-        }
-        
-        public void SetItem(int slot, IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            if (slot < _vanillaMachineInputInventory.InputSlot.Count)
-            {
-                _vanillaMachineInputInventory.SetItem(slot, itemStack);
-            }
-            else
-            {
-                slot -= _vanillaMachineInputInventory.InputSlot.Count;
-                _vanillaMachineOutputInventory.SetItem(slot, itemStack);
-            }
-        }
-        
-        public void SetItem(int slot, ItemId itemId, int count)
-        {
-            BlockException.CheckDestroy(this);
-            
-            var item = ServerContext.ItemStackFactory.Create(itemId, count);
-            SetItem(slot, item);
-        }
-        
-        public int GetSlotSize()
-        {
-            BlockException.CheckDestroy(this);
-            
-            return _vanillaMachineInputInventory.InputSlot.Count + _vanillaMachineOutputInventory.OutputSlot.Count;
-        }
-        
-        public ReadOnlyCollection<IItemStack> CreateCopiedItems()
-        {
-            BlockException.CheckDestroy(this);
-            
-            var items = new List<IItemStack>();
-            items.AddRange(_vanillaMachineInputInventory.InputSlot);
-            items.AddRange(_vanillaMachineOutputInventory.OutputSlot);
-            return new ReadOnlyCollection<IItemStack>(items);
-        }
-        
-        public List<IItemStack> InsertItem(List<IItemStack> itemStacks)
-        {
-            BlockException.CheckDestroy(this);
-            
-            //アイテムをインプットスロットに入れた後、プロセス開始できるなら開始
-            return _vanillaMachineInputInventory.InsertItem(itemStacks);
-        }
-        
-        public bool InsertionCheck(List<IItemStack> itemStacks)
-        {
-            BlockException.CheckDestroy(this);
-            
-            return _vanillaMachineInputInventory.InsertionCheck(itemStacks);
-        }
-        
-        /// <summary>
-        ///     アイテムの置き換えを実行しますが、同じアイテムIDの場合はそのまま現在のアイテムにスタックされ、スタックしきらなかったらその分を返します。
-        /// </summary>
-        /// <param name="slot"></param>
-        /// <param name="itemStack"></param>
-        /// <returns></returns>
-        public IItemStack ReplaceItem(int slot, IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            ItemProcessResult result;
-            if (slot < _vanillaMachineInputInventory.InputSlot.Count)
-            {
-                //アイテムIDが同じの時はスタックして余ったものを返す
-                var item = _vanillaMachineInputInventory.InputSlot[slot];
-                if (item.Id == itemStack.Id)
-                {
-                    result = item.AddItem(itemStack);
-                    _vanillaMachineInputInventory.SetItem(slot, result.ProcessResultItemStack);
-                    return result.RemainderItemStack;
-                }
-                
-                //違う場合はそのまま入れ替える
-                _vanillaMachineInputInventory.SetItem(slot, itemStack);
-                return item;
-            }
-            else
-            {
-                //アウトプットスロットのインデックスに変換する
-                slot -= _vanillaMachineInputInventory.InputSlot.Count;
-                
-                var item = _vanillaMachineOutputInventory.OutputSlot[slot];
-                
-                if (item.Id == itemStack.Id)
-                {
-                    result = item.AddItem(itemStack);
-                    _vanillaMachineOutputInventory.SetItem(slot, result.ProcessResultItemStack);
-                    return result.RemainderItemStack;
-                }
-                
-                _vanillaMachineOutputInventory.SetItem(slot, itemStack);
-                return item;
-            }
-        }
-        
-        public bool IsDestroy { get; private set; }
-        public void Destroy()
-        {
-            IsDestroy = true;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Service/ConnectingInventoryListPriorityInsertItemService.cs
-```cs
-using System.Collections.Generic;
-using System.Linq;
-using Core.Const;
-using Core.Item.Interface;
-using Core.Master;
-using Game.Block.Component;
-using Game.Block.Interface.Component;
-
-namespace Game.Block.Blocks.Service
-{
-    /// <summary>
-    ///     順番にアイテムに入れ続けるシステム
-    /// </summary>
-    public class ConnectingInventoryListPriorityInsertItemService
-    {
-        private readonly BlockConnectorComponent<IBlockInventory> _blockConnectorComponent;
-        
-        private int _index = -1;
-        
-        public ConnectingInventoryListPriorityInsertItemService(BlockConnectorComponent<IBlockInventory> blockConnectorComponent)
-        {
-            _blockConnectorComponent = blockConnectorComponent;
-        }
-        
-        public IItemStack InsertItem(IItemStack itemStack)
-        {
-            IReadOnlyList<IBlockInventory> inventories = _blockConnectorComponent.ConnectedTargets.Keys.ToArray();
-            
-            for (var i = 0; i < inventories.Count && itemStack.Id != ItemMaster.EmptyItemId; i++)
-                lock (inventories)
-                {
-                    AddIndex();
-                    itemStack = inventories[_index].InsertItem(itemStack);
-                }
-            
-            return itemStack;
-        }
-        
-        private void AddIndex()
-        {
-            _index++;
-            if (_blockConnectorComponent.ConnectedTargets.Count <= _index) _index = 0;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.CraftChainer/Util/ItemRecipeViewerDataContainer.cs
-```cs
-using System.Collections.Generic;
-using System.Linq;
-using Core.Master;
-using Mooresmaster.Model.CraftRecipesModule;
-using Mooresmaster.Model.MachineRecipesModule;
-
-namespace Game.CraftChainer.Util
-{
-    // TODO クラフトレシピ改善時にこれを使う
-    public class ItemRecipeViewerDataContainer
-    {
-        private readonly Dictionary<ItemId, RecipeViewerItemRecipes> _recipeViewerElements = new();
-        
-        public ItemRecipeViewerDataContainer()
-        {
-            // そのアイテムを作成するための機械のレシピを取得
-            // Get the recipe of the machine to create the item
-            var machineRecipeDictionary = new Dictionary<ItemId, List<MachineRecipeMasterElement>>();
-            foreach (var machineRecipeMaster in MasterHolder.MachineRecipesMaster.MachineRecipes.Data)
-            {
-                foreach (var outputItem in machineRecipeMaster.OutputItems)
-                {
-                    var itemId = MasterHolder.ItemMaster.GetItemId(outputItem.ItemGuid);
-                    if (!machineRecipeDictionary.ContainsKey(itemId))
-                    {
-                        machineRecipeDictionary.Add(itemId, new List<MachineRecipeMasterElement>());
-                    }
-                    
-                    machineRecipeDictionary[itemId].Add(machineRecipeMaster);
-                }
-            }
-            
-            // そのアイテムを作成するためのクラフトレシピを取得
-            // Get the craft recipe to create the item
-            foreach (var itemId in MasterHolder.ItemMaster.GetItemAllIds())
-            {
-                var resultCraftRecipes = MasterHolder.CraftRecipeMaster.GetResultItemCraftRecipes(itemId).ToList();
-                
-                // そのアイテムを作成するための機械のレシピを機械ごとに作成
-                // Create a machine recipe for each machine to create the item
-                var resultMachineRecipes = new Dictionary<BlockId, List<MachineRecipeMasterElement>>();
-                if (machineRecipeDictionary.TryGetValue(itemId, out var machineRecipesList))
-                {
-                    foreach (var machineRecipe in machineRecipesList)
-                    {
-                        var blockId = MasterHolder.BlockMaster.GetBlockId(machineRecipe.BlockGuid);
-                        if (resultMachineRecipes.ContainsKey(blockId))
-                        {
-                            resultMachineRecipes[blockId].Add(machineRecipe);
-                        }
-                        else
-                        {
-                            resultMachineRecipes.Add(blockId, new List<MachineRecipeMasterElement> { machineRecipe });
-                        }
-                    }
-                }
-                
-                _recipeViewerElements.Add(itemId, new RecipeViewerItemRecipes(resultCraftRecipes, resultMachineRecipes, itemId));
-            }
-            
-            // レシピが存在しないアイテムを除外する
-            // Exclude items with no recipes
-            var removeList = new List<ItemId>();
-            foreach (var kv in _recipeViewerElements)
-            {
-                var itemId = kv.Key;
-                var recipe = kv.Value;
-                
-                if (recipe.CraftRecipes.Count == 0 && recipe.MachineRecipes.Count == 0)
-                {
-                    removeList.Add(itemId);
-                }
-            }
-            foreach (var itemId in removeList)
-            {
-                _recipeViewerElements.Remove(itemId);
-            }
-        }
-        
-        public RecipeViewerItemRecipes GetItem(ItemId itemId)
-        {
-            return _recipeViewerElements.GetValueOrDefault(itemId);
-        }
-    }
-    
-    public class RecipeViewerItemRecipes
-    {
-        public readonly ItemId ResultItemId;
-        
-        //TODO 他のmodの他のレシピにも対応できるようの柔軟性をもたせた設計を考える
-        public readonly List<CraftRecipeMasterElement> CraftRecipes;
-        public readonly Dictionary<BlockId, List<MachineRecipeMasterElement>> MachineRecipes;
-        
-        public RecipeViewerItemRecipes(List<CraftRecipeMasterElement> craftRecipes, Dictionary<BlockId, List<MachineRecipeMasterElement>> machineRecipes, ItemId resultItemId)
-        {
-            CraftRecipes = craftRecipes;
-            MachineRecipes = machineRecipes;
-            ResultItemId = resultItemId;
         }
     }
 }
@@ -1575,407 +218,130 @@ namespace Tests.CombinedTest.Core
 }
 ```
 
-moorestech_server/Assets/Scripts/Server.Protocol/PacketResponse/Util/CollectBeltConveyorItems.cs
+moorestech_server/Assets/Scripts/Tests/UnitTest/Core/Block/ItemShooterTest.cs
 ```cs
-using System.Collections.Generic;
-using Core.Master;
-using Game.Block;
-using Game.Block.Blocks.BeltConveyor;
-using Game.Block.Factory.BlockTemplate;
-using Game.Block.Interface;
-using Game.Block.Interface.Extension;
-using Game.Context;
-using Game.Entity.Interface;
-using Game.Entity.Interface.EntityInstance;
-using Game.World.Interface.DataStore;
-using UnityEngine;
-using static Mooresmaster.Model.BlocksModule.BlockMasterElement;
-
-
-namespace Server.Protocol.PacketResponse.Util
-{
-    /// <summary>
-    ///     ベルトコンベアにあるアイテムを収集し、エンティティに変換して返す
-    /// </summary>
-    public static class CollectBeltConveyorItems
-    {
-        public static List<IEntity> CollectItem(IEntityFactory entityFactory)
-        {
-            var result = new List<IEntity>();
-            result.AddRange(CollectItemFromWorld(entityFactory));
-            
-            return result;
-        }
-        
-        
-        public static List<IEntity> CollectItemFromWorld(IEntityFactory entityFactory)
-        {
-            var result = new List<IEntity>();
-            
-            //TODO 個々のパフォーマンス問題を何とかする
-            foreach (KeyValuePair<BlockInstanceId, WorldBlockData> blockMaster in ServerContext.WorldBlockDatastore.BlockMasterDictionary)
-            {
-                var block = blockMaster.Value.Block;
-                var pos = blockMaster.Value.BlockPositionInfo.OriginalPos;
-                // TODO 重かったら考える
-                if (!block.TryGetComponent<IItemCollectableBeltConveyor>(out var component))
-                {
-                    continue;
-                }
-                
-                var direction = ServerContext.WorldBlockDatastore.GetBlockDirection(pos);
-                result.AddRange(CollectItemFromBeltConveyor(entityFactory, component, pos, direction));
-            }
-            
-            return result;
-        }
-        
-        private static List<IEntity> CollectItemFromBeltConveyor(IEntityFactory entityFactory, IItemCollectableBeltConveyor beltConveyor, Vector3Int pos, BlockDirection blockDirection)
-        {
-            var result = new List<IEntity>();
-            for (var i = 0; i < beltConveyor.BeltConveyorItems.Count; i++)
-            {
-                var beltConveyorItem = beltConveyor.BeltConveyorItems[i];
-                if (beltConveyorItem == null) continue;
-                
-                //残り時間をどこまで進んだかに変換するために 1- する
-                var percent = 1f - (float)beltConveyorItem.RemainingPercent;
-                float entityX = pos.x;
-                float entityZ = pos.z;
-                switch (blockDirection)
-                {
-                    case BlockDirection.North:
-                        entityX += 0.5f; //ベルトコンベアの基準座標は中心なので0.5を他してアイテムを中心に持ってくる
-                        entityZ += percent;
-                        break;
-                    case BlockDirection.South:
-                        entityX += 0.5f;
-                        entityZ += 1 - percent; //北とは逆向きなので1を引いて逆向きにする
-                        break;
-                    case BlockDirection.East:
-                        entityX += percent;
-                        entityZ += 0.5f;
-                        break;
-                    case BlockDirection.West:
-                        entityX += 1 - percent;
-                        entityZ += 0.5f;
-                        break;
-                }
-                
-                //この0.3という値は仮
-                var y = pos.y + VanillaBeltConveyorComponent.DefaultBeltConveyorHeight;
-                
-                if (beltConveyor.SlopeType == BeltConveyorSlopeType.Up)
-                {
-                    y += percent;
-                    y += 0.1f;
-                }
-                else if (beltConveyor.SlopeType == BeltConveyorSlopeType.Down)
-                {
-                    y -= percent;
-                    y += 0.1f;
-                    y++;
-                }
-                
-                var position = new Vector3(entityX, y, entityZ);
-                var itemEntity = (ItemEntity)entityFactory.CreateEntity(VanillaEntityType.VanillaItem, new EntityInstanceId(beltConveyorItem.ItemInstanceId.AsPrimitive()), position);
-                itemEntity.SetState(beltConveyorItem.ItemId, 1);
-                
-                result.Add(itemEntity);
-            }
-            
-            return result;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/ChestLogicTest.cs
-```cs
-using System.Collections.Generic;
+using System;
+using Core.Const;
 using Core.Master;
 using Core.Update;
-using Game.Block.Blocks.BeltConveyor;
 using Game.Block.Blocks.Chest;
-using Game.Block.Component;
+using Game.Block.Blocks.ItemShooter;
 using Game.Block.Interface;
-using Game.Block.Interface.Component;
 using Game.Block.Interface.Extension;
 using Game.Context;
-using Mooresmaster.Model.BlockConnectInfoModule;
 using NUnit.Framework;
 using Server.Boot;
 using Tests.Module.TestMod;
 using UnityEngine;
-using Random = System.Random;
 
-namespace Tests.CombinedTest.Core
+namespace Tests.UnitTest.Core.Block
 {
-    public class ChestLogicTest
+    public class ItemShooterTest
     {
-        //ベルトコンベアからアイテムを搬入する
         [Test]
-        public void BeltConveyorInsertChestLogicTest()
+        public void ShooterTest()
         {
             var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var itemFactory = ServerContext.ItemStackFactory;
             
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            var blockFactory = ServerContext.BlockFactory;
+            // アイテムシューターのテストは、以下のように、一度下がり、再び上がるような構造になっている
+            // Item shooter tests are structured to drop once and then rise again as follows
+            // ↓ チェスト Chest
+            // □ ＿ 
+            //     ＼         ＿ ＿ → アイテムの流れ Item flow
+            //        ＼ ＿ ／
+            //   ↑  ↑ アイテムシューター ItemShooter
+            var chestPosition = new Vector3Int(0, 0, 0);
+            var horizonShooter1 = new Vector3Int(0, 0, 1);
+            var downShooter1 = new Vector3Int(0, -1, 2);
+            var downShooter2 = new Vector3Int(0, -2, 3);
+            var horizonShooter2 = new Vector3Int(0, -2, 4);
+            var upShooter = new Vector3Int(0, -2, 5);
+            var horizonShooter3 = new Vector3Int(0, -1, 6);
+            var horizonShooter4 = new Vector3Int(0, -1, 7);
             
-            var random = new Random(4123);
+            var chest = AddBlock(ForUnitTestModBlockId.ChestId, chestPosition).GetComponent<VanillaChestComponent>();
+            var shooter1 = AddBlock(ForUnitTestModBlockId.StraightItemShooter, horizonShooter1).GetComponent<ItemShooterComponent>();
+            var down1 = AddBlock(ForUnitTestModBlockId.DownItemShooter, downShooter1).GetComponent<ItemShooterComponent>();
+            var down2 = AddBlock(ForUnitTestModBlockId.DownItemShooter, downShooter2).GetComponent<ItemShooterComponent>();
+            var shooter2 = AddBlock(ForUnitTestModBlockId.StraightItemShooter, horizonShooter2).GetComponent<ItemShooterComponent>();
+            var up = AddBlock(ForUnitTestModBlockId.UpItemShooter, upShooter).GetComponent<ItemShooterComponent>();
+            var shooter3 = AddBlock(ForUnitTestModBlockId.StraightItemShooter, horizonShooter3).GetComponent<ItemShooterComponent>();
+            var shooter4 = AddBlock(ForUnitTestModBlockId.StraightItemShooter, horizonShooter4).GetComponent<ItemShooterComponent>();
             
-            var id = new ItemId(random.Next(1, 11));
-            var count = 1;
-            var item = itemStackFactory.Create(id, count);
+            chest.InsertItem(itemFactory.Create(new ItemId(1), 1));
             
-            var chest = blockFactory.Create(ForUnitTestModBlockId.ChestId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
-            var chestComponent = chest.GetComponent<VanillaChestComponent>();
+            // チェストのUpdateを呼び出し
+            // Call the Update of the chest
+            chest.Update();
             
-            var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
-            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
-            beltConveyorComponent.InsertItem(item);
+            // デフォルトでインサートされる速度の検証
+            // Verification of the speed inserted by default
+            var shooterItem1 = GetShooterItem(shooter1);
+            Assert.AreEqual(1, shooterItem1.ItemId.AsPrimitive());
+            Assert.AreEqual(1, shooterItem1.CurrentSpeed);
+            Assert.AreEqual(1, shooterItem1.RemainingPercent);
             
-            var beltConnectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
-            beltConnectInventory.Add(chestComponent, (null, null));
+            // 個々の値は実際の値をみて検証し、極端にかわってなければOKとする
+            // Verify each value by looking at the actual value and OK if it is not extremely different
+            var shootedItem = WaitInsertItem(down1, "1");
+            Assert.IsTrue(0.7f <= shootedItem.CurrentSpeed && shootedItem.CurrentSpeed <= 0.8f);
             
+            shootedItem = WaitInsertItem(down2, "Down1");
+            Assert.IsTrue(1.2f <= shootedItem.CurrentSpeed && shootedItem.CurrentSpeed <= 1.5f);
             
-            while (!chestComponent.GetItem(0).Equals(item)) GameUpdater.UpdateWithWait();
+            shootedItem = WaitInsertItem(shooter2, "Down2");
+            Assert.IsTrue(1.7f <= shootedItem.CurrentSpeed && shootedItem.CurrentSpeed <= 2.0f);
             
-            Assert.True(chestComponent.GetItem(0).Equals(item));
+            shootedItem = WaitInsertItem(up, "2");
+            Assert.IsTrue(1.4f <= shootedItem.CurrentSpeed && shootedItem.CurrentSpeed <= 1.8f);
+            
+            shootedItem = WaitInsertItem(shooter3, "Up", up);
+            Assert.IsTrue(0.9f <= shootedItem.CurrentSpeed && shootedItem.CurrentSpeed <= 1.3f);
+            
+            shootedItem = WaitInsertItem(shooter4, "3");
+            Assert.IsTrue(0.6f <= shootedItem.CurrentSpeed && shootedItem.CurrentSpeed <= 1.1f);
         }
         
-        [Test]
-        public void BeltConveyorOutputChestLogicTest()
+        private ShooterInventoryItem WaitInsertItem(ItemShooterComponent waitTarget, string tag, ItemShooterComponent waitFrom = null)
         {
-            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
-            
-            var blockFactory = ServerContext.BlockFactory;
-            
-            var chest = blockFactory.Create(ForUnitTestModBlockId.ChestId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
-            var chestComponent = chest.GetComponent<VanillaChestComponent>();
-            
-            var beltconveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
-            var beltConveyorComponent = beltconveyor.GetComponent<VanillaBeltConveyorComponent>();
-            
-            chestComponent.SetItem(0, new ItemId(1), 1);
-            
-            var chestConnectInventory = (Dictionary<IBlockInventory, (IConnectOption, IConnectOption)>)chest.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
-            chestConnectInventory.Add(beltConveyorComponent, (null, null));
-            GameUpdater.UpdateWithWait();
-            
-            
-            Assert.AreEqual(chestComponent.GetItem(0).Count, 0);
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/BeltConveyor/VanillaBeltConveyorComponent.cs
-```cs
-using System.Collections.Generic;
-using System.Linq;
-using Core.Item.Interface;
-using Core.Master;
-using Core.Update;
-using Game.Block.Component;
-using Game.Block.Factory.BlockTemplate;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Context;
-using Newtonsoft.Json;
-
-namespace Game.Block.Blocks.BeltConveyor
-{
-    /// <summary>
-    ///     アイテムの搬出入とインベントリの管理を行う
-    /// </summary>
-    public class VanillaBeltConveyorComponent : IBlockInventory, IBlockSaveState, IItemCollectableBeltConveyor, IUpdatableBlockComponent
-    {
-        public const float DefaultBeltConveyorHeight = 0.3f;
-        
-        public int InventoryItemNum { get; }
-        public bool IsDestroy { get; private set; }
-        
-        public BeltConveyorSlopeType SlopeType { get; }
-        public IReadOnlyList<IOnBeltConveyorItem> BeltConveyorItems => _inventoryItems;
-        private readonly BeltConveyorInventoryItem[] _inventoryItems;
-        
-        private readonly BlockConnectorComponent<IBlockInventory> _blockConnectorComponent;
-        private readonly string _blockName;
-        private double _timeOfItemEnterToExit; //ベルトコンベアにアイテムが入って出るまでの時間
-        
-        public VanillaBeltConveyorComponent(int inventoryItemNum, float timeOfItemEnterToExit, BlockConnectorComponent<IBlockInventory> blockConnectorComponent, string blockName, BeltConveyorSlopeType slopeType)
-        {
-            _blockName = blockName;
-            SlopeType = slopeType;
-            InventoryItemNum = inventoryItemNum;
-            _timeOfItemEnterToExit = timeOfItemEnterToExit;
-            _blockConnectorComponent = blockConnectorComponent;
-            
-            _inventoryItems = new BeltConveyorInventoryItem[inventoryItemNum];
-        }
-        
-        public VanillaBeltConveyorComponent(string state, int inventoryItemNum, float timeOfItemEnterToExit, BlockConnectorComponent<IBlockInventory> blockConnectorComponent, string blockName, BeltConveyorSlopeType slopeType) :
-            this(inventoryItemNum, timeOfItemEnterToExit, blockConnectorComponent, blockName, slopeType)
-        {
-            //stateから復元
-            //データがないときは何もしない
-            if (state == string.Empty) return;
-            
-            List<BeltConveyorItemJsonObject> items = JsonConvert.DeserializeObject<List<BeltConveyorItemJsonObject>>(state);
-            for (var i = 0; i < items.Count; i++)
+            var currentTime = DateTime.Now;
+            while (true)
             {
-                if (items[i].ItemStack == null) continue;
-                
-                var itemStack = items[i].ItemStack.ToItemStack();
-                _inventoryItems[i] = new BeltConveyorInventoryItem(itemStack.Id, itemStack.ItemInstanceId);
-                _inventoryItems[i].RemainingPercent = items[i].RemainingPercent;
-            }
-        }
-        
-        public IItemStack InsertItem(IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            //新しく挿入可能か
-            if (_inventoryItems[^1] != null)
-                //挿入可能でない
-                return itemStack;
-            
-            _inventoryItems[^1] = new BeltConveyorInventoryItem(itemStack.Id, itemStack.ItemInstanceId);
-            
-            //挿入したのでアイテムを減らして返す
-            return itemStack.SubItem(1);
-        }
-        
-        public int GetSlotSize()
-        {
-            BlockException.CheckDestroy(this);
-            
-            return _inventoryItems.Length;
-        }
-        
-        public IItemStack GetItem(int slot)
-        {
-            BlockException.CheckDestroy(this);
-            
-            var itemStackFactory = ServerContext.ItemStackFactory;
-            if (_inventoryItems[slot] == null) return itemStackFactory.CreatEmpty();
-            return itemStackFactory.Create(_inventoryItems[slot].ItemId, 1);
-        }
-        
-        public void SetItem(int slot, IItemStack itemStack)
-        {
-            BlockException.CheckDestroy(this);
-            
-            //TODO lockすべき？？
-            _inventoryItems[slot] = new BeltConveyorInventoryItem(itemStack.Id, itemStack.ItemInstanceId);
-        }
-        
-        public void Destroy()
-        {
-            IsDestroy = true;
-        }
-        
-        public string GetSaveState()
-        {
-            BlockException.CheckDestroy(this);
-            
-            if (_inventoryItems.Length == 0) return string.Empty;
-            
-            var saveItems = new List<BeltConveyorItemJsonObject>();
-            foreach (var t in _inventoryItems) saveItems.Add(new BeltConveyorItemJsonObject(t));
-            
-            return JsonConvert.SerializeObject(saveItems);
-        }
-        
-        /// <summary>
-        ///     アイテムの搬出判定を行う
-        ///     判定はUpdateで毎フレーム行われる
-        ///     TODO 個々のマルチスレッド対応もいい感じにやりたい
-        /// </summary>
-        public void Update()
-        {
-            BlockException.CheckDestroy(this);
-            
-            //TODO lockすべき？？
-            var count = _inventoryItems.Length;
-            
-            if (_blockName == VanillaBeltConveyorTemplate.Hueru && _inventoryItems[0] == null) _inventoryItems[0] = new BeltConveyorInventoryItem(new ItemId(4), ItemInstanceId.Create());
-            for (var i = 0; i < count; i++)
-            {
-                var item = _inventoryItems[i];
-                if (item == null) continue;
-                
-                //次のインデックスに入れる時間かどうかをチェックする
-                var nextIndexStartTime = i * (1f / InventoryItemNum);
-                var isNextInsertable = item.RemainingPercent <= nextIndexStartTime;
-                
-                //次に空きがあれば次に移動する
-                if (isNextInsertable && i != 0)
+                var item = waitTarget.GetItem(0);
+                if (item.Id != ItemMaster.EmptyItemId)
                 {
-                    if (_inventoryItems[i - 1] == null)
-                    {
-                        _inventoryItems[i - 1] = item;
-                        _inventoryItems[i] = null;
-                    }
-                    
-                    continue;
+                    // アイテム挿入時間を出力
+                    var shooterItem = GetShooterItem(waitTarget);
+                    var totalSeconds = (DateTime.Now - currentTime).TotalSeconds;
+                    var currentSpeed = shooterItem.CurrentSpeed;
+                    // 下2桁表示
+                    Debug.Log($"{tag} Time: {totalSeconds:F2} Speed: {currentSpeed:F2}");
+                    return shooterItem;
                 }
+                GameUpdater.Update();
                 
-                //最後のアイテムの場合は接続先に渡す
-                if (i == 0 && item.RemainingPercent <= 0)
+                // 5秒経過したら失敗
+                if ((DateTime.Now - currentTime).TotalSeconds > 5)
                 {
-                    if (_blockName == VanillaBeltConveyorTemplate.Kieru) _inventoryItems[i] = null;
-                    
-                    var insertItem = ServerContext.ItemStackFactory.Create(item.ItemId, 1, item.ItemInstanceId);
-                    
-                    if (_blockConnectorComponent.ConnectedTargets.Count == 0) continue;
-                    
-                    var connector = _blockConnectorComponent.ConnectedTargets.First();
-                    var output = connector.Key.InsertItem(insertItem);
-                    
-                    //渡した結果がnullItemだったらそのアイテムを消す
-                    if (output.Id == ItemMaster.EmptyItemId) _inventoryItems[i] = null;
-                    
-                    continue;
+                    Assert.Fail("インサートができていません");
                 }
-                
-                //時間を減らす 
-                item.RemainingPercent -= (float)(GameUpdater.UpdateSecondTime * (1f / (float)_timeOfItemEnterToExit));
             }
         }
         
-        public void SetTimeOfItemEnterToExit(double time)
+        private ShooterInventoryItem GetShooterItem(ItemShooterComponent target)
         {
-            _timeOfItemEnterToExit = time;
+            var item = target.BeltConveyorItems[0];
+            return item as ShooterInventoryItem;
         }
         
-        public BeltConveyorInventoryItem GetBeltConveyorItem(int index)
+        private IBlock AddBlock(BlockId blockId, Vector3Int position)
         {
-            BlockException.CheckDestroy(this);
-            return _inventoryItems[index];
-        }
-    }
-    
-    public class BeltConveyorItemJsonObject
-    {
-        [JsonProperty("itemStack")] public ItemStackSaveJsonObject ItemStack;
-        
-        [JsonProperty("remainingTime")] public double RemainingPercent;
-        
-        public BeltConveyorItemJsonObject(BeltConveyorInventoryItem beltConveyorInventoryItem)
-        {
-            if (beltConveyorInventoryItem == null)
-            {
-                ItemStack = null;
-                RemainingPercent = 1;
-                return;
-            }
+            var world = ServerContext.WorldBlockDatastore;
             
-            var item = ServerContext.ItemStackFactory.Create(beltConveyorInventoryItem.ItemId, 1);
-            ItemStack = new ItemStackSaveJsonObject(item);
-            RemainingPercent = beltConveyorInventoryItem.RemainingPercent;
+            world.TryAddBlock(blockId, position, BlockDirection.North, out var block);
+            
+            return block;
         }
     }
 }
@@ -2072,551 +438,2264 @@ namespace Tests.CombinedTest.Core
 }
 ```
 
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/Inventory/VanillaMachineInputInventory.cs
-```cs
-using System.Collections.Generic;
-using Core.Inventory;
-using Core.Item.Interface;
-using Core.Master;
-using Game.Block.Event;
-using Game.Block.Interface;
-using Game.Block.Interface.Event;
-using Game.Context;
-using Mooresmaster.Model.MachineRecipesModule;
-
-namespace Game.Block.Blocks.Machine.Inventory
-{
-    /// <summary>
-    ///     インプットのインベントリとアウトプットのインベントリを同じように扱う
-    ///     Insertなどの処理は基本的にInputのインベントリにのみ行う
-    /// </summary>
-    public class VanillaMachineInputInventory
-    {
-        private readonly BlockId _blockId;
-        
-        private readonly BlockOpenableInventoryUpdateEvent _blockInventoryUpdate;
-        private readonly BlockInstanceId _blockInstanceId;
-        private readonly OpenableInventoryItemDataStoreService _itemDataStoreService;
-        
-        public VanillaMachineInputInventory(BlockId blockId, int inputSlot, BlockOpenableInventoryUpdateEvent blockInventoryUpdate, BlockInstanceId blockInstanceId)
-        {
-            _blockId = blockId;
-            _blockInventoryUpdate = blockInventoryUpdate;
-            _blockInstanceId = blockInstanceId;
-            _itemDataStoreService = new OpenableInventoryItemDataStoreService(InvokeEvent, ServerContext.ItemStackFactory, inputSlot);
-        }
-        
-        public IReadOnlyList<IItemStack> InputSlot => _itemDataStoreService.InventoryItems;
-        
-        public bool IsAllowedToStartProcess()
-        {
-            //ブロックIDと現在のインプットスロットからレシピを検索する
-            if (TryGetRecipeElement(out var recipe))
-            {
-                //実行できるレシピかどうか
-                return recipe.RecipeConfirmation(_blockId, InputSlot);
-            }
-            return false;
-        }
-        
-        public IItemStack InsertItem(IItemStack itemStack)
-        {
-            return _itemDataStoreService.InsertItem(itemStack);
-        }
-        
-        public List<IItemStack> InsertItem(List<IItemStack> itemStacks)
-        {
-            return _itemDataStoreService.InsertItem(itemStacks);
-        }
-        
-        public bool TryGetRecipeElement(out MachineRecipeMasterElement recipe)
-        {
-            return MachineRecipeMasterUtil.TryGetRecipeElement(_blockId, InputSlot, out recipe);
-        }
-        
-        public void ReduceInputSlot(MachineRecipeMasterElement recipe)
-        {
-            //inputスロットからアイテムを減らす
-            foreach (var item in recipe.InputItems)
-                for (var i = 0; i < InputSlot.Count; i++)
-                {
-                    var itemId = MasterHolder.ItemMaster.GetItemId(item.ItemGuid);
-                    
-                    if (_itemDataStoreService.InventoryItems[i].Id != itemId || item.Count > InputSlot[i].Count) continue;
-                    //アイテムを減らす
-                    _itemDataStoreService.SetItem(i, InputSlot[i].SubItem(item.Count));
-                    break;
-                }
-        }
-        
-        public void SetItem(int slot, IItemStack itemStack)
-        {
-            _itemDataStoreService.SetItem(slot, itemStack);
-        }
-        
-        public bool InsertionCheck(List<IItemStack> itemStacks)
-        {
-            return _itemDataStoreService.InsertionCheck(itemStacks);
-        }
-        
-        private void InvokeEvent(int slot, IItemStack itemStack)
-        {
-            _blockInventoryUpdate.OnInventoryUpdateInvoke(new BlockOpenableInventoryUpdateEventProperties(
-                _blockInstanceId, slot, itemStack));
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.Block/Blocks/Machine/Inventory/VanillaMachineOutputInventory.cs
-```cs
-using System.Collections.Generic;
-using System.Linq;
-using Core.Inventory;
-using Core.Item.Interface;
-using Core.Master;
-using Core.Update;
-using Game.Block.Blocks.Service;
-using Game.Block.Component;
-using Game.Block.Event;
-using Game.Block.Interface;
-using Game.Block.Interface.Component;
-using Game.Block.Interface.Event;
-using Game.Context;
-using Mooresmaster.Model.MachineRecipesModule;
-using UniRx;
-
-namespace Game.Block.Blocks.Machine.Inventory
-{
-    public class VanillaMachineOutputInventory
-    {
-        public IReadOnlyList<IItemStack> OutputSlot => _itemDataStoreService.InventoryItems;
-        
-        private readonly BlockOpenableInventoryUpdateEvent _blockInventoryUpdate;
-        private readonly ConnectingInventoryListPriorityInsertItemService _connectInventoryService;
-        private readonly BlockInstanceId _blockInstanceId;
-        
-        private readonly int _inputSlotSize;
-        private readonly OpenableInventoryItemDataStoreService _itemDataStoreService;
-        
-        public VanillaMachineOutputInventory(int outputSlot, IItemStackFactory itemStackFactory,
-            BlockOpenableInventoryUpdateEvent blockInventoryUpdate, BlockInstanceId blockInstanceId, int inputSlotSize, BlockConnectorComponent<IBlockInventory> blockConnectorComponent)
-        {
-            _blockInventoryUpdate = blockInventoryUpdate;
-            _blockInstanceId = blockInstanceId;
-            _inputSlotSize = inputSlotSize;
-            _itemDataStoreService = new OpenableInventoryItemDataStoreService(InvokeEvent, itemStackFactory, outputSlot);
-            _connectInventoryService = new ConnectingInventoryListPriorityInsertItemService(blockConnectorComponent);
-            GameUpdater.UpdateObservable.Subscribe(_ => Update());
-        }
-        
-        private void Update()
-        {
-            InsertConnectInventory();
-        }
-        
-        /// <summary>
-        ///     アウトプットスロットにアイテムを入れれるかチェック
-        /// </summary>
-        /// <param name="machineRecipe"></param>
-        /// <returns>スロットに空きがあったらtrue</returns>
-        public bool IsAllowedToOutputItem(MachineRecipeMasterElement machineRecipe)
-        {
-            foreach (var itemOutput in machineRecipe.OutputItems)
-            {
-                var outputItemId = MasterHolder.ItemMaster.GetItemId(itemOutput.ItemGuid);
-                var outputItemStack = ServerContext.ItemStackFactory.Create(outputItemId, itemOutput.Count);
-                
-                var isAllowed = OutputSlot.Aggregate(false, (current, slot) => slot.IsAllowedToAdd(outputItemStack) || current);
-                
-                if (!isAllowed) return false;
-            }
-            
-            return true;
-        }
-        
-        public void InsertOutputSlot(MachineRecipeMasterElement machineRecipe)
-        {
-            //アウトプットスロットにアイテムを格納する
-            foreach (var itemOutput in machineRecipe.OutputItems)
-                for (var i = 0; i < OutputSlot.Count; i++)
-                {
-                    var outputItemId = MasterHolder.ItemMaster.GetItemId(itemOutput.ItemGuid);
-                    var outputItemStack = ServerContext.ItemStackFactory.Create(outputItemId, itemOutput.Count);
-                    
-                    if (!OutputSlot[i].IsAllowedToAdd(outputItemStack)) continue;
-                    
-                    var item = OutputSlot[i].AddItem(outputItemStack).ProcessResultItemStack;
-                    _itemDataStoreService.SetItem(i, item);
-                    break;
-                }
-        }
-        
-        private void InsertConnectInventory()
-        {
-            for (var i = 0; i < OutputSlot.Count; i++)
-                _itemDataStoreService.SetItem(i, _connectInventoryService.InsertItem(OutputSlot[i]));
-        }
-        
-        public void SetItem(int slot, IItemStack itemStack)
-        {
-            _itemDataStoreService.SetItem(slot, itemStack);
-        }
-        
-        
-        private void InvokeEvent(int slot, IItemStack itemStack)
-        {
-            _blockInventoryUpdate.OnInventoryUpdateInvoke(new BlockOpenableInventoryUpdateEventProperties(
-                _blockInstanceId, slot + _inputSlotSize, itemStack));
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.CraftChainer/CraftNetwork/CraftChainerNetwork.cs
-```cs
-using System.Collections.Generic;
-
-namespace Game.CraftChainer.CraftNetwork
-{
-    public class CraftChainerNetwork
-    {
-        public List<ICraftChainerNode> CraftChainerNodes; // TODO ネットワークの異常検知
-        
-        public ICraftChainerNode GetInsertTargetNode(ICraftChainerNode currentNode, CraftChainerNodeId targetNodeId)
-        {
-            // TODO ルートを計算
-            
-            // TODO 次のノードを返す
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChain/CraftChainItem.cs
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/GearBeltConveyorTest.cs
 ```cs
 using System;
 using System.Collections.Generic;
 using Core.Master;
-using Mooresmaster.Model.CraftRecipesModule;
-using Mooresmaster.Model.MachineRecipesModule;
+using Core.Update;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Component;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Gear.Common;
+using Microsoft.Extensions.DependencyInjection;
+using Mooresmaster.Model.BlockConnectInfoModule;
+using Mooresmaster.Model.BlocksModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module;
+using Tests.Module.TestMod;
 using UnityEngine;
+
+namespace Tests.CombinedTest.Core
+{
+    public class GearBeltConveyorTest
+    {
+        // トルクの供給率が100%のとき、指定した時間でアイテムが出てくるテスト
+        [Test]
+        public void OutputTestWhenTorqueSuppliedRateIs100()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            const int id = 2;
+            const int count = 3;
+            var item = itemStackFactory.Create(new ItemId(id), count);
+            var dummy = new DummyBlockInventory();
+            
+            
+            // gearBeltConveyorブロックを生成
+            var gearBeltConveyorPosition = new Vector3Int(0, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.GearBeltConveyor, gearBeltConveyorPosition, BlockDirection.North, out var gearBeltConveyor);
+            var beltConveyorComponent = gearBeltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            var connectInventory = (Dictionary<IBlockInventory, ConnectedInfo>)gearBeltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            connectInventory.Add(dummy, new ConnectedInfo());
+            
+            // generatorブロックを作成
+            var generatorPosition = new Vector3Int(1, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SimpleGearGenerator, generatorPosition, BlockDirection.East, out var generator);
+            
+            // testGearブロックを作成
+            var testGearPosition = new Vector3Int(2, 0, 0);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.SmallGear, testGearPosition, BlockDirection.East, out var testGear);
+            
+            var gearNetworkDatastore = serviceProvider.GetService<GearNetworkDatastore>();
+            IReadOnlyDictionary<GearNetworkId, GearNetwork> gearNetwork = gearNetworkDatastore.GearNetworks;
+            
+            
+            const int torqueRate = 1;
+            const int generatorRpm = 10;
+            var gearBeltConveyorBlockParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.GearBeltConveyor).BlockParam as GearBeltConveyorBlockParam;
+            var duration = 1f / (generatorRpm * torqueRate * gearBeltConveyorBlockParam.BeltConveyorSpeed);
+            var expectedEndTime = DateTime.Now.AddSeconds(duration);
+            var startTime = DateTime.Now;
+            beltConveyorComponent.InsertItem(item);
+            
+            // for (var i = 0; i < 100; i++)
+            // {
+            //     GameUpdater.UpdateWithWait();
+            // }
+            var c = 0;
+            while (!dummy.IsItemExists)
+            {
+                c++;
+                GameUpdater.UpdateWithWait();
+                var elapsed = DateTime.Now - startTime;
+                if (elapsed.TotalSeconds > 20) Assert.Fail();
+            }
+            
+            Assert.True(dummy.IsItemExists);
+            
+            var now = DateTime.Now;
+            Debug.Log($"{now} {expectedEndTime}\n{(now - startTime).TotalSeconds}\n{(expectedEndTime - now).TotalSeconds}\n{duration}\n{c}");
+            Assert.True(now <= expectedEndTime.AddSeconds(0.4));
+            Assert.True(expectedEndTime.AddSeconds(-0.4) <= now);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/ChestLogicTest.cs
+```cs
+using System.Collections.Generic;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Blocks.Chest;
+using Game.Block.Component;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Mooresmaster.Model.BlockConnectInfoModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+using Random = System.Random;
+
+namespace Tests.CombinedTest.Core
+{
+    public class ChestLogicTest
+    {
+        //ベルトコンベアからアイテムを搬入する
+        [Test]
+        public void BeltConveyorInsertChestLogicTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var random = new Random(4123);
+            
+            var id = new ItemId(random.Next(1, 11));
+            var count = 1;
+            var item = itemStackFactory.Create(id, count);
+            
+            var chest = blockFactory.Create(ForUnitTestModBlockId.ChestId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var chestComponent = chest.GetComponent<VanillaChestComponent>();
+            
+            var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            beltConveyorComponent.InsertItem(item);
+            
+            var beltConnectInventory = (Dictionary<IBlockInventory, ConnectedInfo>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            beltConnectInventory.Add(chestComponent, new ConnectedInfo());
+            
+            
+            while (!chestComponent.GetItem(0).Equals(item)) GameUpdater.UpdateWithWait();
+            
+            Assert.True(chestComponent.GetItem(0).Equals(item));
+        }
+        
+        [Test]
+        public void BeltConveyorOutputChestLogicTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var blockFactory = ServerContext.BlockFactory;
+            
+            var chest = blockFactory.Create(ForUnitTestModBlockId.ChestId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var chestComponent = chest.GetComponent<VanillaChestComponent>();
+            
+            var beltconveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(0), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var beltConveyorComponent = beltconveyor.GetComponent<VanillaBeltConveyorComponent>();
+            
+            chestComponent.SetItem(0, new ItemId(1), 1);
+            
+            var chestConnectInventory = (Dictionary<IBlockInventory, ConnectedInfo>)chest.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            chestConnectInventory.Add(beltConveyorComponent, new ConnectedInfo());
+            GameUpdater.UpdateWithWait();
+            
+            
+            Assert.AreEqual(chestComponent.GetItem(0).Count, 0);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Core/BeltConveyorTest.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Component;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Mooresmaster.Model.BlockConnectInfoModule;
+using Mooresmaster.Model.BlocksModule;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module;
+using Tests.Module.TestMod;
+using UnityEngine;
+using Random = System.Random;
+
+namespace Tests.CombinedTest.Core
+{
+    /// <summary>
+    ///     コンフィグが変わったらこのテストを変更に応じて変更してください
+    /// </summary>
+    public class BeltConveyorTest
+    {
+        //一定個数以上アイテムが入らないテストした後、正しく次に出力されるかのテスト
+        [Test]
+        public void FullInsertAndChangeConnectorBeltConveyorTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            var random = new Random(4123);
+            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
+            {
+                var id = new ItemId(random.Next(0, 10));
+                
+                var item = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount + 1);
+                var beltConveyor = ServerContext.BlockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+                
+                var endTime = DateTime.Now.AddSeconds(beltConveyorParam.TimeOfItemEnterToExit);
+                
+                while (DateTime.Now < endTime.AddSeconds(0.1))
+                {
+                    item = beltConveyorComponent.InsertItem(item);
+                    GameUpdater.UpdateWithWait();
+                }
+                
+                Assert.AreEqual(item.Count, 1);
+                
+                var dummy = new DummyBlockInventory();
+                
+                var connectInventory = (Dictionary<IBlockInventory, ConnectedInfo>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+                connectInventory.Add(dummy, new ConnectedInfo());
+                GameUpdater.UpdateWithWait();
+                
+                Assert.AreEqual(itemStackFactory.Create(id, 1).ToString(), dummy.InsertedItems[0].ToString());
+            }
+        }
+        
+        //一個のアイテムが入って正しく搬出されるかのテスト
+        [Test]
+        public void InsertBeltConveyorTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
+            var blockFactory = ServerContext.BlockFactory;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            
+            var id = new ItemId(2);
+            const int count = 3;
+            var item = itemStackFactory.Create(id, count);
+            var dummy = new DummyBlockInventory();
+            
+            // アイテムを挿入
+            var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            
+            var connectInventory = (Dictionary<IBlockInventory, ConnectedInfo>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+            connectInventory.Add(dummy, new ConnectedInfo());
+            
+            var expectedEndTime = DateTime.Now.AddSeconds(beltConveyorParam.TimeOfItemEnterToExit);
+            var outputItem = beltConveyorComponent.InsertItem(item);
+            
+            //5秒以上経過したらループを抜ける 
+            while (!dummy.IsItemExists) GameUpdater.UpdateWithWait();
+            
+            
+            //チェック
+            Assert.True(DateTime.Now <= expectedEndTime.AddSeconds(0.1));
+            Assert.True(expectedEndTime.AddSeconds(-0.1) <= DateTime.Now);
+            
+            Debug.Log($"{(DateTime.Now - expectedEndTime).TotalSeconds}");
+            
+            Assert.True(outputItem.Equals(itemStackFactory.Create(id, count - 1)));
+            var tmp = itemStackFactory.Create(id, 1);
+            Debug.Log($"{tmp} {dummy.InsertedItems[0]}");
+            Assert.AreEqual(tmp.ToString(), dummy.InsertedItems[0].ToString());
+        }
+        
+        //ベルトコンベアのインベントリをフルにするテスト
+        [Test]
+        public void FullInsertBeltConveyorTest()
+        {
+            var (_, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var beltConveyorParam = MasterHolder.BlockMaster.GetBlockMaster(ForUnitTestModBlockId.BeltConveyorId).BlockParam as BeltConveyorBlockParam;
+            var blockFactory = ServerContext.BlockFactory;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            var random = new Random(4123);
+            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
+            {
+                var id = new ItemId(random.Next(1, 11));
+                var item = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount + 1);
+                var dummy = new DummyBlockInventory(beltConveyorParam.BeltConveyorItemCount);
+                var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId, new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+                
+                var connectInventory = (Dictionary<IBlockInventory, ConnectedInfo>)beltConveyor.GetComponent<BlockConnectorComponent<IBlockInventory>>().ConnectedTargets;
+                connectInventory.Add(dummy, new ConnectedInfo());
+                
+                while (!dummy.IsItemExists)
+                {
+                    item = beltConveyorComponent.InsertItem(item);
+                    GameUpdater.UpdateWithWait();
+                }
+                
+                Assert.True(item.Equals(itemStackFactory.Create(id, 0)));
+                var tmp = itemStackFactory.Create(id, beltConveyorParam.BeltConveyorItemCount);
+                Assert.True(dummy.InsertedItems[0].Equals(tmp));
+            }
+        }
+        
+        //二つのアイテムが入ったとき、一方しか入らないテスト
+        [Test]
+        public void Insert2ItemBeltConveyorTest()
+        {
+            var (_, serviceProvider) =
+                new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var blockFactory = ServerContext.BlockFactory;
+            var itemStackFactory = ServerContext.ItemStackFactory;
+            
+            var random = new Random(4123);
+            for (var i = 0; i < 2; i++) //あまり深い意味はないが取りあえずテストは2回実行する
+            {
+                //必要な変数を作成
+                var item1 = itemStackFactory.Create(new ItemId(random.Next(1, 11)), random.Next(1, 10));
+                var item2 = itemStackFactory.Create(new ItemId(random.Next(1, 11)), random.Next(1, 10));
+                
+                var beltConveyor = blockFactory.Create(ForUnitTestModBlockId.BeltConveyorId , new BlockInstanceId(int.MaxValue), new BlockPositionInfo(Vector3Int.one, BlockDirection.North, Vector3Int.one));
+                var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+                
+                var item1Out = beltConveyorComponent.InsertItem(item1);
+                var item2Out = beltConveyorComponent.InsertItem(item2);
+                
+                Assert.True(item1Out.Equals(item1.SubItem(1)));
+                Assert.True(item2Out.Equals(item2));
+            }
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Server/CollectBeltConveyorItemsTest.cs
+```cs
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Core.Item.Interface;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.Entity.Interface;
+using Game.World.Interface.DataStore;
+using Microsoft.Extensions.DependencyInjection;
+using NUnit.Framework;
+using Server.Boot;
+using Server.Protocol.PacketResponse.Util;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.CombinedTest.Server
+{
+    public class CollectBeltConveyorItemsTest
+    {
+        //4秒で入って出るベルトコンベアで残り1秒で出る時の座標が正しいかどうかをテストする
+        private const double RemainingTime = 0.5;
+        private const int ItemInstanceId = 100;
+        
+        private readonly List<Vector2Int> _plusPlayerCoordinate = new() { new Vector2Int(0, 0) };
+        
+        /// <summary>
+        ///     各方向に向いたベルトコンベア内のアイテムの位置が正しいかどうかをチェックする
+        /// </summary>
+        [Test]
+        public void BlockDirectionItemPositionTest()
+        {
+            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            var worldDataStore = ServerContext.WorldBlockDatastore;
+            var entityFactory = serviceProvider.GetService<IEntityFactory>();
+            
+            //x,yがともにプラスの時のテスト 
+            
+            //北向きに設置
+            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.North, worldDataStore);
+            
+            //エンティティを取得
+            var itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            const float defaultY = CollectBeltConveyorItems.DefaultBeltConveyorHeight;
+            Assert.AreEqual(0.5, itemEntity.Position.x); //0,0に設置してベルトコンベアの中心にアイテムがあるため、Z座標は0.5となる 
+            Assert.AreEqual(defaultY, itemEntity.Position.y); //2次元座標から3次元座標に変換されているため、Y座標は0となる
+            Assert.AreEqual(0.75, itemEntity.Position.z); //4秒のベルトコンベアで残り1秒の時の座標のため、1の3/4の位置にある
+            //エンティティを検証
+            Assert.AreEqual(ItemInstanceId, itemEntity.InstanceId.AsPrimitive());
+            Assert.AreEqual(VanillaEntityType.VanillaItem, itemEntity.EntityType);
+            
+            
+            //東向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
+            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.East, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(0.75, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(0.5, itemEntity.Position.z);
+            
+            
+            //ブロックを削除し南向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
+            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.South, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(0.5, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(0.25, itemEntity.Position.z);
+            
+            
+            //ブロックを削除し西向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
+            CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.West, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //ブロックを削除し座標を検証
+            Assert.AreEqual(0.25, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(0.5, itemEntity.Position.z);
+            
+            
+            //x、yがマイナスであるときのテスト
+            //北向きに設
+            worldDataStore.RemoveBlock(new Vector3Int(0, 0, 0));
+            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.North, worldDataStore);
+            
+            //エンティティを取得
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(-0.5, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(-0.25, itemEntity.Position.z); //ブロックの座標がマイナスなので-1を原点として3/4の値である-0.25となる
+            
+            
+            //東向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
+            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.East, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(-0.25, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(-0.5, itemEntity.Position.z);
+            
+            
+            //ブロックを削除し南向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
+            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.South, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //座標を検証
+            Assert.AreEqual(-0.5, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(-0.75, itemEntity.Position.z);
+            
+            
+            //ブロックを削除し西向きに設置
+            worldDataStore.RemoveBlock(new Vector3Int(-1, 0, -1));
+            CreateOneItemInsertedItem(new Vector3Int(-1, 0, -1), BlockDirection.West, worldDataStore);
+            itemEntity = CollectBeltConveyorItems.CollectItem(entityFactory)[0];
+            //ブロックを削除し座標を検証
+            Assert.AreEqual(-0.75, itemEntity.Position.x);
+            Assert.AreEqual(defaultY, itemEntity.Position.y);
+            Assert.AreEqual(-0.5, itemEntity.Position.z);
+        }
+        
+        
+        /// <summary>
+        ///     ベルトコンベアから別のベルトコンベアに移ってもInstanceIdは変化しないことをテスト
+        /// </summary>
+        [Test]
+        public void ItemInstanceIdTest()
+        {
+            var (packet, serviceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var worldDataStore = ServerContext.WorldBlockDatastore;
+            
+            worldDataStore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, new Vector3Int(0, 0, 1), BlockDirection.North, out var belt2);
+            //二つのベルトコンベアを繋がるように設置
+            
+            var belt1 = CreateOneItemInsertedItem(new Vector3Int(0, 0, 0), BlockDirection.North, worldDataStore);
+            
+            //4秒間アップデートする
+            var now = DateTime.Now;
+            while (DateTime.Now - now < TimeSpan.FromSeconds(RemainingTime * 1.1)) GameUpdater.UpdateWithWait();
+            
+            //ベルトコンベアからアイテムを取得
+            var inventoryItemsField = typeof(VanillaBeltConveyorComponent).GetField("_inventoryItems", BindingFlags.NonPublic | BindingFlags.Instance);
+            var inventory2Items = (VanillaBeltConveyorInventoryItem[])inventoryItemsField.GetValue(belt2.GetComponent<VanillaBeltConveyorComponent>());
+            
+            //InstanceIdが変化していないことを検証
+            Assert.AreEqual(ItemInstanceId, inventory2Items[3].ItemInstanceId.AsPrimitive());
+        }
+        
+        
+        private IBlock CreateOneItemInsertedItem(Vector3Int pos, BlockDirection blockDirection, IWorldBlockDatastore datastore)
+        {
+            datastore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, pos, blockDirection, out var beltConveyor);
+            var beltConveyorComponent = beltConveyor.GetComponent<VanillaBeltConveyorComponent>();
+            
+            //リフレクションで_inventoryItemsを取得
+            var inventoryItemsField = typeof(VanillaBeltConveyorComponent).GetField("_inventoryItems", BindingFlags.NonPublic | BindingFlags.Instance);
+            var inventoryItems = (VanillaBeltConveyorInventoryItem[])inventoryItemsField.GetValue(beltConveyorComponent);
+            
+            inventoryItems[0] = new VanillaBeltConveyorInventoryItem(new ItemId(1), new ItemInstanceId(ItemInstanceId));
+            inventoryItems[1] = null;
+            inventoryItems[2] = null;
+            inventoryItems[3] = null;
+            
+            inventoryItems[0].RemainingPercent = 0.25f;
+            
+            return beltConveyor;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Game/BeltConveyorInsertTest.cs
+```cs
+using System;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Chest;
+using Game.Block.Interface;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+
+namespace Tests.CombinedTest.Game
+{
+    public class BeltConveyorInsertTest
+    {
+        //2つのアイテムがチェストから出されてベルトコンベアに入り、全てチェストに入るテスト
+        [Test]
+        public void TwoItemIoTest()
+        {
+            var (_, saveServiceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            
+            //それぞれを設置
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.ChestId, Vector3Int.zero, BlockDirection.North, out var inputChest);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.BeltConveyorId, new Vector3Int(0, 0, 1), BlockDirection.North, out var beltConveyor);
+            worldBlockDatastore.TryAddBlock(ForUnitTestModBlockId.ChestId, new Vector3Int(0, 0, 2), BlockDirection.North, out var outputChest);
+            
+            //インプットチェストにアイテムを2つ入れる
+            var inputChestComponent = inputChest.GetComponent<VanillaChestComponent>();
+            inputChestComponent.SetItem(0, new ItemId(1), 2);
+            
+            //ベルトコンベアのアイテムが出てから入るまでの6秒間アップデートする
+            var now = DateTime.Now;
+            while (DateTime.Now - now < TimeSpan.FromSeconds(5)) GameUpdater.UpdateWithWait();
+            
+            //アイテムが出ているか確認
+            Assert.AreEqual(0, inputChestComponent.GetItem(0).Count);
+            //アイテムが入っているか確認
+            var outputChestComponent = outputChest.GetComponent<VanillaChestComponent>();
+            Assert.AreEqual(2, outputChestComponent.GetItem(0).Count);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChainerEntryPoint.cs
+```cs
+using Game.Context;
+using Game.CraftChainer.BlockComponent.Template;
+using Game.CraftChainer.CraftNetwork;
+using static Mooresmaster.Model.BlocksModule.BlockMasterElement;
 
 namespace Game.CraftChainer
 {
-    public struct CraftChainItem : IEquatable<CraftChainItem>
+    public static class CraftChainerEntryPoint
     {
-        public ItemId ItemId { get; }
-        public int Count { get; }
+        public static void Entry()
+        {
+            // block template register
+            var blockFactory = ServerContext.BlockFactory;    
+            blockFactory.RegisterTemplateIBlock(BlockTypeConst.CraftChainerCrafter, new ChainerCrafterTemplate());
+            blockFactory.RegisterTemplateIBlock(BlockTypeConst.CraftChainerTransporter, new ChainerTransporterTemplate());
+            blockFactory.RegisterTemplateIBlock(BlockTypeConst.CraftChainerProviderChest, new ChainerProviderChestTemplate());
+            blockFactory.RegisterTemplateIBlock(BlockTypeConst.CraftChainerMainComputer, new ChainerMainComputerTemplate());
+            
+            // manager init
+            new CraftChainerManager();
+            
+            
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/CombinedTest/Game/CraftChainerTest.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Core.Item.Interface;
+using Core.Master;
+using Core.Update;
+using Game.Block.Blocks.Chest;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Context;
+using Game.CraftChainer.BlockComponent;
+using Game.CraftChainer.BlockComponent.Computer;
+using Game.CraftChainer.BlockComponent.Crafter;
+using Game.CraftChainer.CraftChain;
+using NUnit.Framework;
+using Server.Boot;
+using Tests.Module.TestMod;
+using UnityEngine;
+using static Tests.Module.TestMod.ForUnitTestModBlockId;
+
+namespace Tests.CombinedTest.Game
+{
+    public class CraftChainerTest
+    {
+        public ItemId ItemAId;
+        public ItemId ItemBId;
+        public ItemId ItemCId;
         
-        public CraftChainItem(ItemId itemId, int count)
+        [SetUp]
+        public void SetupCraftChainerTest()
         {
-            ItemId = itemId;
-            Count = count;
+            var (_, saveServiceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            Guid itemAGuid = new("189672cb-6811-4080-bde1-1f9ff0ec63ff");
+            Guid itemBGuid = new("547791fe-bfd8-4748-aafa-c7449391eca5");
+            Guid itemCGuid = new("c8d16ba4-8a7d-4ab1-80a4-5a9c0a119627");
+            ItemAId = MasterHolder.ItemMaster.GetItemId(itemAGuid);
+            ItemBId = MasterHolder.ItemMaster.GetItemId(itemBGuid);
+            ItemCId = MasterHolder.ItemMaster.GetItemId(itemCGuid);
         }
         
-        public bool Equals(CraftChainItem other)
+        [Test]
+        public void SimpleChainerTest()
         {
-            return ItemId.Equals(other.ItemId) && Count == other.Count;
+            var (_, saveServiceProvider) = new MoorestechServerDIContainerGenerator().Create(TestModDirectory.ForUnitTestModDirectory);
+            
+            // ネットワークの作成
+            // Create a network
+            var network = CreateNetwork();
+            
+            // 供給チェストにアイテム設定
+            // Set items in the provider chest
+            var chestItems = new List<IItemStack>()
+            {
+                ServerContext.ItemStackFactory.Create(ItemCId, 5),
+            };
+            network.SetProviderChestItem(chestItems);
+            
+            // メインコンピュータにアイテム作成リクエスト
+            // Item creation request to the main computer
+            var success = network.SetRequestMainComputer(ItemAId, 1);
+            Assert.IsTrue(success);
+            
+            // 20秒たってもクラフトされない場合は失敗
+            // Fail if not crafted after 10 seconds
+            var now = DateTime.Now;
+            
+            while (true)
+            {
+                try
+                {
+                    GameUpdater.UpdateWithWait();
+                }
+                catch (Exception e)
+                {
+                    ExportItemLog();
+                    Debug.LogException(e);
+                    throw;
+                }
+                
+                if (network.OnMainComputerItemExist(ItemAId, 1))
+                {
+                    Assert.Pass();
+                    break;
+                }
+                
+                if (DateTime.Now - now > TimeSpan.FromSeconds(10))
+                {
+                    ExportItemLog();
+                    var block = ServerContext.WorldBlockDatastore.GetBlock(new Vector3Int(2, 0, 1));
+                    Assert.Fail("Failed to create item");
+                }
+            }
         }
-        public override bool Equals(object obj)
+        
+        private void ExportItemLog()
         {
-            return obj is CraftChainItem other && Equals(other);
+            foreach (var blocks in ServerContext.WorldBlockDatastore.BlockMasterDictionary.Values)
+            {
+                if (!blocks.Block.ComponentManager.TryGetComponent<IBlockInventory>(out var blockComponent))
+                {
+                    continue;
+                }
+                
+                var slotSize = blockComponent.GetSlotSize();
+                for (int i = 0; i < slotSize; i++)
+                {
+                    var item = blockComponent.GetItem(i);
+                    if (item.Id == ItemMaster.EmptyItemId)
+                    {
+                        continue;
+                    }
+                    
+                    var pos = blocks.BlockPositionInfo.OriginalPos;
+                    var type = blocks.Block.BlockMasterElement.BlockType;
+                    var itemName = MasterHolder.ItemMaster.GetItemMaster(item.Id).Name;
+                    Debug.Log($"{pos} Type: {type} Slot: {i}, ItemName: \"{itemName}\" Count: {item.Count}");
+                }
+            }
         }
-        public override int GetHashCode()
+        
+        private CraftChainerTestNetworkContainer CreateNetwork()
         {
-            return HashCode.Combine(ItemId, Count);
+            //TODO イメージ図
+
+            // クラフトチェイナーの部分
+            // Parts of the craft chainer
+            AddBlock(CraftChainerTransporter, 1, 0, BlockDirection.East);
+            AddBlock(CraftChainerTransporter, 0, 1, BlockDirection.South);
+            AddBlock(CraftChainerTransporter, 1, 1, BlockDirection.East);
+            AddBlock(CraftChainerTransporter, 2, 1, BlockDirection.East);
+            var component = AddBlock(CraftChainerTransporter, 3, 1, BlockDirection.East).ComponentManager.GetComponent<ChainerTransporterComponent>();
+            ChainerTransporterInserter.Transporter_Test_NodeId = component.NodeId;
+            AddBlock(CraftChainerTransporter, 3, 0, BlockDirection.South);
+            AddBlock(CraftChainerTransporter, 3, -1, BlockDirection.West);
+            AddBlock(CraftChainerTransporter, 2, -1, BlockDirection.West);
+            AddBlock(CraftChainerTransporter, 1, -1, BlockDirection.West);
+            AddBlock(CraftChainerTransporter, 0, -1, BlockDirection.West);
+            AddBlock(CraftChainerTransporter, -1, -1, BlockDirection.North);
+            AddBlock(CraftChainerTransporter, -1, 0, BlockDirection.North);
+            AddBlock(CraftChainerTransporter, -1, 1, BlockDirection.North);
+            AddBlock(CraftChainerTransporter, -1, 2, BlockDirection.East);
+            var providerChest = AddBlock(CraftChainerProviderChest, 0, 2, BlockDirection.North);
+            var crafter1 = AddBlock(CraftChainerCrafter, 2, 2, BlockDirection.North);
+            var crafter2 = AddBlock(CraftChainerCrafter, 3, 2, BlockDirection.North);
+            var mainComputer = AddBlock(CraftChainerMainComputer, 0, 0, BlockDirection.North);
+            
+            // 工場の部分
+            // Parts of the factory
+            AddBlock(CraftChainerBeltConveyor, 2, 3, BlockDirection.North);
+            AddBlock(CraftChainerBeltConveyor, 3, 3, BlockDirection.North);
+            AddBlock(CraftChainerMachine, 2, 4, BlockDirection.North);
+            AddBlock(CraftChainerMachine, 3, 4, BlockDirection.North);
+            
+            AddBlock(CraftChainerBeltConveyor, 0, 5, BlockDirection.South);
+            AddBlock(CraftChainerBeltConveyor, 1, 5, BlockDirection.West);
+            AddBlock(CraftChainerBeltConveyor, 2, 5, BlockDirection.West);
+            AddBlock(CraftChainerBeltConveyor, 3, 5, BlockDirection.West);
+            
+            AddBlock(CraftChainerBeltConveyor, 0, 4, BlockDirection.South);
+            AddBlock(CraftChainerBeltConveyor, 0, 3, BlockDirection.South);
+            
+            var container = new CraftChainerTestNetworkContainer(mainComputer, crafter1, crafter2, providerChest);
+            
+            // レシピの設定
+            // Recipe setting
+            var inputItem1 = new List<CraftingSolverItem>
+            {
+                new(ItemCId, 2),
+            };
+            var outputItem1 = new List<CraftingSolverItem>
+            {
+                new(ItemBId, 1),
+            };
+            container.SetCrafter1Recipe(inputItem1, outputItem1);
+            
+            var inputItem2 = new List<CraftingSolverItem>
+            {
+                new(ItemBId, 2),
+                new(ItemCId, 1),
+            };
+            var outputItem2 = new List<CraftingSolverItem>
+            {
+                new(ItemAId, 1),
+            };
+            container.SetCrafter2Recipe(inputItem2, outputItem2);
+            
+            // assert chain network
+            var computerComputer = mainComputer.ComponentManager.GetComponent<ChainerMainComputerComponent>();
+            Assert.AreEqual(computerComputer.ChainerNetworkContext.CrafterComponents.Count, 2);
+            Assert.AreEqual(computerComputer.ChainerNetworkContext.ProviderChests.Count, 1);
+            
+            
+            return container;
+        }
+        
+        private IBlock AddBlock(BlockId blockId, int x, int z, BlockDirection direction)
+        {
+            var worldBlockDatastore = ServerContext.WorldBlockDatastore;
+            worldBlockDatastore.TryAddBlock(blockId, new Vector3Int(x, 0, z), direction, out var block);
+            
+            return block;
+        }
+        
+        public class CraftChainerTestNetworkContainer
+        {
+            public readonly IBlock MainComputer;
+            public readonly IBlock Crafter1;
+            public readonly IBlock Crafter2;
+            public readonly IBlock ProviderChest;
+            public CraftChainerTestNetworkContainer(IBlock mainComputer, IBlock crafter1, IBlock crafter2, IBlock providerChest)
+            {
+                MainComputer = mainComputer;
+                Crafter1 = crafter1;
+                Crafter2 = crafter2;
+                ProviderChest = providerChest;
+            }
+            
+            public void SetCrafter1Recipe(List<CraftingSolverItem> inputItems, List<CraftingSolverItem> outputItem)
+            {
+                SetCrafterRecipe(Crafter1, inputItems, outputItem);
+            }
+            public void SetCrafter2Recipe(List<CraftingSolverItem> inputItems, List<CraftingSolverItem> outputItem)
+            {
+                SetCrafterRecipe(Crafter2, inputItems, outputItem);
+            }
+            
+            private void SetCrafterRecipe(IBlock crafter, List<CraftingSolverItem> inputItems, List<CraftingSolverItem> outputItem)
+            {
+                var crafterComponent = crafter.ComponentManager.GetComponent<ChainerCrafterComponent>();
+                crafterComponent.SetRecipe(inputItems, outputItem);
+            }
+            
+            public void SetProviderChestItem(List<IItemStack> items)
+            {
+                var chestComponent = ProviderChest.ComponentManager.GetComponent<VanillaChestComponent>();
+                chestComponent.InsertItem(items);
+            }
+            
+            public bool SetRequestMainComputer(ItemId item, int count)
+            {
+                var mainComputerComponent = MainComputer.ComponentManager.GetComponent<ChainerMainComputerComponent>();
+                return mainComputerComponent.StartCreateItem(item, count);
+            }
+            
+            public bool OnMainComputerItemExist(ItemId targetItem, int count)
+            {
+                var chest = MainComputer.ComponentManager.GetComponent<VanillaChestComponent>();
+                
+                var existCount = 0;
+                foreach (var item in chest.InventoryItems)
+                {
+                    if (item.Id == targetItem)
+                    {
+                        existCount += item.Count;
+                    }
+                }
+                
+                return existCount >= count;
+            }
         }
     }
     
-    public static class CraftChainItemUtil
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Transporter/ChainerTransporterInserter.cs
+```cs
+using System.Linq;
+using Core.Item.Interface;
+using Game.Block.Blocks.Connector;
+using Game.Block.Component;
+using Game.Block.Interface.Component;
+using Game.CraftChainer.CraftNetwork;
+using UnityEngine;
+
+namespace Game.CraftChainer.BlockComponent
+{
+    /// <summary>
+    /// そのアイテムがどのクラフトノードに挿入されるべきかを判断し、挿入するためのクラス
+    /// Class for determining which craft node the item should be inserted into and inserting it
+    /// </summary>
+    public class ChainerTransporterInserter : IBlockInventoryInserter
     {
-        public static List<CraftChainItem> ToResultCraftChainItems(this CraftRecipeMasterElement craftRecipeMaster, CraftChainItem targetCraftChainItem)
+        public static CraftChainerNodeId Transporter_Test_NodeId;
+        
+        private readonly BlockConnectorComponent<IBlockInventory> _blockConnectorComponent;
+        private readonly CraftChainerNodeId _startChainerNodeId;
+        
+        public ChainerTransporterInserter(BlockConnectorComponent<IBlockInventory> blockConnectorComponent, CraftChainerNodeId startChainerNodeId)
         {
-            var requireCraftCount = GetRequireCraftCount(craftRecipeMaster, targetCraftChainItem);
-            
-            var resultItemId = MasterHolder.ItemMaster.GetItemId(craftRecipeMaster.CraftResultItemGuid);
-            var resultItemCount = craftRecipeMaster.CraftResultCount * requireCraftCount;
-            return new List<CraftChainItem> { new(resultItemId, resultItemCount) };
+            _blockConnectorComponent = blockConnectorComponent;
+            _startChainerNodeId = startChainerNodeId;
         }
         
-        public static List<CraftChainItem> ToRequireCraftChainItems(this CraftRecipeMasterElement craftRecipeMaster, CraftChainItem targetCraftChainItem)
+        public IItemStack InsertItem(IItemStack itemStack)
         {
-            var requireCraftCount = GetRequireCraftCount(craftRecipeMaster, targetCraftChainItem);
-            
-            var requireCraftItems = new List<CraftChainItem>();
-            foreach (var requiredItem in craftRecipeMaster.RequiredItems)
+            if (Transporter_Test_NodeId == _startChainerNodeId)
             {
-                var requiredItemId = MasterHolder.ItemMaster.GetItemId(requiredItem.ItemGuid);
-                var requiredItemCount = requiredItem.Count * requireCraftCount;
-                
-                requireCraftItems.Add(new CraftChainItem(requiredItemId, requiredItemCount));
+                Debug.Log(itemStack);
             }
             
-            return requireCraftItems;
-        }
-        
-        private static int GetRequireCraftCount(CraftRecipeMasterElement craftRecipeMaster,CraftChainItem targetCraftChainItem)
-        {
-            return Mathf.CeilToInt(craftRecipeMaster.CraftResultCount / (float)targetCraftChainItem.Count);
-        }
-        
-        public static List<CraftChainItem> ToResultMachineChainItems(this MachineRecipeMasterElement recipeMasterElement, CraftChainItem targetCraftChainItem)
-        {
-            var requireCount = GetRequireMachineCraftCount(recipeMasterElement, targetCraftChainItem);
-            
-            var result = new List<CraftChainItem>();
-            foreach (var outputItem in recipeMasterElement.OutputItems)
+            var context = CraftChainerManager.Instance.GetChainerNetworkContext(_startChainerNodeId);
+            if (context == null)
             {
-                var outputItemId = MasterHolder.ItemMaster.GetItemId(outputItem.ItemGuid);
-                var outputItemCount = outputItem.Count * requireCount;
-                
-                result.Add(new CraftChainItem(outputItemId, outputItemCount));
+                return itemStack;
             }
             
-            return result;
+            var target = context.GetTransportNextBlock(itemStack, _startChainerNodeId, _blockConnectorComponent);
+            if (target == null) return itemStack;
+            
+            return target.InsertItem(itemStack);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Transporter/ChainerTransporterComponent.cs
+```cs
+using System.Collections.Generic;
+using Game.Block.Interface.Component;
+using Game.CraftChainer.CraftNetwork;
+using Newtonsoft.Json;
+
+namespace Game.CraftChainer.BlockComponent
+{
+    public class ChainerTransporterComponent : ICraftChainerNode
+    {
+        public CraftChainerNodeId NodeId { get; } = CraftChainerNodeId.Create();
+        
+        public ChainerTransporterComponent() { }
+        public ChainerTransporterComponent(Dictionary<string, string> componentStates) : this()
+        {
+            var state = componentStates[SaveKey];
+            var jsonObject = JsonConvert.DeserializeObject<ChainerTransporterComponentJsonObject>(state);
+            NodeId = new CraftChainerNodeId(jsonObject.NodeId);
         }
         
-        public static List<CraftChainItem> ToRequireMachineChainItems(this MachineRecipeMasterElement recipeMasterElement, CraftChainItem targetCraftChainItem)
+        
+        public string SaveKey { get; } = typeof(ChainerTransporterComponent).FullName;
+        public string GetSaveState()
         {
-            var requireCount = GetRequireMachineCraftCount(recipeMasterElement, targetCraftChainItem);
+            return JsonConvert.SerializeObject(new ChainerTransporterComponentJsonObject(this));
+        }
+        
+        public bool IsDestroy { get; private set; }
+        public void Destroy()
+        {
+            IsDestroy = true;
+        }
+    }
+    
+    public class ChainerTransporterComponentJsonObject 
+    {
+        [JsonProperty("nodeId")] public int NodeId { get; set; }
+        
+        public ChainerTransporterComponentJsonObject(ChainerTransporterComponent component)
+        {
+            NodeId = component.NodeId.AsPrimitive();
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Template/ChainerTransporterTemplate.cs
+```cs
+using System.Collections.Generic;
+using Game.Block.Blocks;
+using Game.Block.Blocks.BeltConveyor;
+using Game.Block.Factory.BlockTemplate;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Mooresmaster.Model.BlocksModule;
+
+namespace Game.CraftChainer.BlockComponent.Template
+{
+    public class ChainerTransporterTemplate : IBlockTemplate
+    {
+        public IBlock New(BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            return GetBlock(null, blockMasterElement, blockInstanceId, blockPositionInfo);
+        }
+        public IBlock Load(Dictionary<string, string> componentStates, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            return GetBlock(componentStates, blockMasterElement, blockInstanceId, blockPositionInfo);
+        }
+        
+        private BlockSystem GetBlock(Dictionary<string, string> componentStates, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            var transporterParam = blockMasterElement.BlockParam as CraftChainerTransporterBlockParam;
             
-            var result = new List<CraftChainItem>();
-            foreach (var requiredItem in recipeMasterElement.InputItems)
+            var transporterComponent = componentStates == null ?
+                new ChainerTransporterComponent() :
+                new ChainerTransporterComponent(componentStates);
+            
+            var slopeType = transporterParam.SlopeType switch
             {
-                var requiredItemId = MasterHolder.ItemMaster.GetItemId(requiredItem.ItemGuid);
-                var requiredItemCount = requiredItem.Count * requireCount;
-                
-                result.Add(new CraftChainItem(requiredItemId, requiredItemCount));
+                ItemShooterBlockParam.SlopeTypeConst.Up => BeltConveyorSlopeType.Up,
+                ItemShooterBlockParam.SlopeTypeConst.Down => BeltConveyorSlopeType.Down,
+                ItemShooterBlockParam.SlopeTypeConst.Straight => BeltConveyorSlopeType.Straight
+            };
+            var connectorComponent = BlockTemplateUtil.CreateInventoryConnector(transporterParam.InventoryConnectors, blockPositionInfo);
+            var beltConveyorConnector = new ChainerTransporterInserter(connectorComponent, transporterComponent.NodeId);
+            var itemCount = transporterParam.TransporterConveyorItemCount;
+            var time = transporterParam.TimeOfItemEnterToExit;
+            
+            var beltComponent = componentStates == null ?
+                new VanillaBeltConveyorComponent(itemCount, time, beltConveyorConnector, slopeType) :
+                new VanillaBeltConveyorComponent(componentStates, itemCount, time, beltConveyorConnector, slopeType);
+            
+            var components = new List<IBlockComponent>
+            {
+                beltComponent,
+                connectorComponent,
+                transporterComponent,
+            };
+            
+            return new BlockSystem(blockInstanceId, blockMasterElement.BlockGuid, components, blockPositionInfo);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Template/ChainerProviderChestTemplate.cs
+```cs
+using System.Collections.Generic;
+using Game.Block.Blocks;
+using Game.Block.Blocks.Chest;
+using Game.Block.Factory.BlockTemplate;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.CraftChainer.BlockComponent.ProviderChest;
+using Game.CraftChainer.CraftNetwork;
+using Mooresmaster.Model.BlocksModule;
+
+namespace Game.CraftChainer.BlockComponent.Template
+{
+    public class ChainerProviderChestTemplate : IBlockTemplate
+    {
+        public IBlock New(BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            return GetBlock(null, blockMasterElement, blockInstanceId, blockPositionInfo);
+        }
+        
+        public IBlock Load(Dictionary<string, string> componentStates, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            return GetBlock(componentStates, blockMasterElement, blockInstanceId, blockPositionInfo);
+        }
+        
+        private IBlock GetBlock(Dictionary<string, string> componentStates, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            var chest = blockMasterElement.BlockParam as CraftChainerProviderChestBlockParam;
+            var inputConnectorComponent = BlockTemplateUtil.CreateInventoryConnector(chest.InventoryConnectors, blockPositionInfo);
+            
+            var nodeId = CraftChainerNodeId.Create();
+            var inserter = new ProviderChestBlockInventoryInserter(nodeId, inputConnectorComponent);
+            
+            var chestComponent = componentStates == null ? 
+                new VanillaChestComponent(blockInstanceId, chest.ItemSlotCount, inserter) : 
+                new VanillaChestComponent(componentStates, blockInstanceId, chest.ItemSlotCount, inserter);
+            
+            var chainerProviderChestComponent = componentStates == null ?
+                new ChainerProviderChestComponent(nodeId, inserter, chestComponent) :
+                new ChainerProviderChestComponent(componentStates, nodeId, inserter, chestComponent);
+            
+            var components = new List<IBlockComponent>
+            {
+                chestComponent,
+                inputConnectorComponent,
+                chainerProviderChestComponent
+            };
+            
+            return new BlockSystem(blockInstanceId, blockMasterElement.BlockGuid, components, blockPositionInfo);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Template/ChainerMainComputerTemplate.cs
+```cs
+using System.Collections.Generic;
+using Game.Block.Blocks;
+using Game.Block.Blocks.Chest;
+using Game.Block.Factory.BlockTemplate;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.CraftChainer.BlockComponent.Computer;
+using Mooresmaster.Model.BlocksModule;
+
+namespace Game.CraftChainer.BlockComponent.Template
+{
+    public class ChainerMainComputerTemplate : IBlockTemplate
+    {
+        public IBlock New(BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            return GetBlock(null, blockMasterElement, blockInstanceId, blockPositionInfo);
+        }
+        
+        public IBlock Load(Dictionary<string, string> componentStates, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            return GetBlock(componentStates, blockMasterElement, blockInstanceId, blockPositionInfo);
+        }
+        
+        private BlockSystem GetBlock(Dictionary<string, string> componentStates, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            var chest = blockMasterElement.BlockParam as CraftChainerMainComputerBlockParam;
+            var connector = BlockTemplateUtil.CreateInventoryConnector(chest.InventoryConnectors, blockPositionInfo);
+            var inserter = new ChainerMainComputerInserter();
+            
+            var chestComponent = componentStates == null ?
+                new VanillaChestComponent(blockInstanceId, chest.ItemSlotCount, inserter) :
+                new VanillaChestComponent(componentStates, blockInstanceId, chest.ItemSlotCount, inserter);
+            
+            var mainComputerComponent = componentStates == null ?
+                new ChainerMainComputerComponent(connector) :
+                new ChainerMainComputerComponent(componentStates, connector);
+            
+            
+            var components = new List<IBlockComponent>
+            {
+                chestComponent,
+                connector,
+                mainComputerComponent
+            };
+            
+            return new BlockSystem(blockInstanceId, blockMasterElement.BlockGuid, components, blockPositionInfo);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Template/ChainerCrafterTemplate.cs
+```cs
+using System.Collections.Generic;
+using Game.Block.Blocks;
+using Game.Block.Blocks.Chest;
+using Game.Block.Blocks.Service;
+using Game.Block.Factory.BlockTemplate;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.CraftChainer.BlockComponent.Crafter;
+using Mooresmaster.Model.BlocksModule;
+
+namespace Game.CraftChainer.BlockComponent.Template
+{
+    public class ChainerCrafterTemplate : IBlockTemplate
+    {
+        public IBlock New(BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            return GetBlock(null, blockMasterElement, blockInstanceId, blockPositionInfo);
+        }
+        
+        public IBlock Load(Dictionary<string, string> componentStates, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            return GetBlock(componentStates, blockMasterElement, blockInstanceId, blockPositionInfo);
+        }
+        
+        private IBlock GetBlock(Dictionary<string, string> componentStates, BlockMasterElement blockMasterElement, BlockInstanceId blockInstanceId, BlockPositionInfo blockPositionInfo)
+        {
+            var param = blockMasterElement.BlockParam as CraftChainerCrafterBlockParam;
+            var inputConnectorComponent = BlockTemplateUtil.CreateInventoryConnector(param.InventoryConnectors, blockPositionInfo);
+            var inserter = new ConnectingInventoryListPriorityInsertItemService(inputConnectorComponent);
+            
+            var chestComponent = componentStates == null ? 
+                new VanillaChestComponent(blockInstanceId, param.ItemSlotCount, inserter) : 
+                new VanillaChestComponent(componentStates, blockInstanceId, param.ItemSlotCount, inserter);
+            
+            var chainerCrafter = componentStates == null ?
+                new ChainerCrafterComponent() :
+                new ChainerCrafterComponent(componentStates);
+            
+            var components = new List<IBlockComponent>
+            {
+                chestComponent,
+                inputConnectorComponent,
+                chainerCrafter
+            };
+            
+            return new BlockSystem(blockInstanceId, blockMasterElement.BlockGuid, components, blockPositionInfo);
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/ProviderChest/ChainerProviderChestComponent.cs
+```cs
+using System.Collections.Generic;
+using Core.Item.Interface;
+using Game.Block.Blocks.Chest;
+using Game.CraftChainer.CraftNetwork;
+using Newtonsoft.Json;
+using UniRx;
+
+namespace Game.CraftChainer.BlockComponent.ProviderChest
+{
+    public class ChainerProviderChestComponent : ICraftChainerNode
+    {
+        public CraftChainerNodeId NodeId { get; }
+        public IReadOnlyList<IItemStack> Inventory => _vanillaChestComponent.InventoryItems;
+        
+        private readonly ProviderChestBlockInventoryInserter _providerChestBlockInventoryInserter;
+        private readonly VanillaChestComponent _vanillaChestComponent;
+        
+        public ChainerProviderChestComponent(CraftChainerNodeId nodeId, ProviderChestBlockInventoryInserter providerChestBlockInventoryInserter, VanillaChestComponent vanillaChestComponent)
+        {
+            NodeId = nodeId;
+            _providerChestBlockInventoryInserter = providerChestBlockInventoryInserter;
+            _vanillaChestComponent = vanillaChestComponent;
+        }
+        public ChainerProviderChestComponent(Dictionary<string, string> componentStates, CraftChainerNodeId nodeId, ProviderChestBlockInventoryInserter providerChestBlockInventoryInserter, VanillaChestComponent vanillaChestComponent) : 
+            this(nodeId, providerChestBlockInventoryInserter, vanillaChestComponent)
+        {
+            var state = componentStates[SaveKey];
+            var jsonObject = JsonConvert.DeserializeObject<ChainerProviderChestComponentJsonObject>(state);
+            NodeId = new CraftChainerNodeId(jsonObject.NodeId);
+        }
+        
+        
+        public bool IsDestroy { get; private set; }
+        public void Destroy()
+        {
+            IsDestroy = true;
+        }
+        
+        public string SaveKey { get; } = typeof(ChainerProviderChestComponent).FullName;
+        public string GetSaveState()
+        {
+            return JsonConvert.SerializeObject(new ChainerProviderChestComponentJsonObject(this));
+        }
+    }
+    
+    public class ChainerProviderChestComponentJsonObject
+    {
+        [JsonProperty("nodeId")] public int NodeId { get; set; }
+        
+        public ChainerProviderChestComponentJsonObject(ChainerProviderChestComponent component)
+        {
+            NodeId = component.NodeId.AsPrimitive();
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/ICraftChainerNode.cs
+```cs
+using Game.Block.Interface.Component;
+using UnitGenerator;
+using UnityEngine;
+using Random = System.Random;
+
+namespace Game.CraftChainer.CraftNetwork
+{
+    /// <summary>
+    /// CraftChainerネットワークを構成するブロックであることを示すためのインターフェース
+    /// IDを永続化する必要があるため、IBlockSaveStateを継承している
+    ///
+    /// An interface to indicate that it is a block that makes up the CraftChainer network.
+    /// Inherits IBlockSaveState because the ID needs to be persisted
+    /// </summary>
+    public interface ICraftChainerNode : IBlockSaveState 
+    {
+        public CraftChainerNodeId NodeId { get; }
+    }
+    
+    [UnitOf(typeof(int))]
+    public partial struct CraftChainerNodeId
+    {
+        public static CraftChainerNodeId Invalid => new(-1); 
+            
+        private static readonly Random _random = new();
+        
+        public static CraftChainerNodeId Create()
+        {
+            var id = _random.Next(int.MinValue, int.MaxValue);
+            while (id == Invalid.value)
+            {
+                id = _random.Next(int.MinValue, int.MaxValue);
             }
             
-            return result;
+            return new CraftChainerNodeId(id);
+        } 
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Crafter/ChainerCrafterComponent.cs
+```cs
+using System;
+using System.Collections.Generic;
+using Game.Block.Interface.Component;
+using Game.CraftChainer.CraftChain;
+using Game.CraftChainer.CraftNetwork;
+using Newtonsoft.Json;
+
+namespace Game.CraftChainer.BlockComponent.Crafter
+{
+    public class ChainerCrafterComponent : ICraftChainerNode
+    {
+        public CraftChainerNodeId NodeId { get; } = CraftChainerNodeId.Create();
+        
+        public CraftingSolverRecipe CraftingSolverRecipe { get; private set; }
+        
+        public ChainerCrafterComponent()
+        {
         }
         
-        private static int GetRequireMachineCraftCount(MachineRecipeMasterElement recipeMasterElement, CraftChainItem targetCraftChainItem)
+        public ChainerCrafterComponent(Dictionary<string, string> componentStates) : this()
         {
-            var outputCount = -1;
+            var state = componentStates[SaveKey];
+            var jsonObject = JsonConvert.DeserializeObject<ChainerCrafterComponentJsonObject>(state);
+            CraftingSolverRecipe = jsonObject.Recipe.ToCraftingSolverRecipe();
+            NodeId = new CraftChainerNodeId(jsonObject.NodeId);
+        }
+        
+        public void SetRecipe(List<CraftingSolverItem> inputItems, List<CraftingSolverItem> outputItem)
+        {
+            var id = CraftingSolverRecipeId.Create();
+            CraftingSolverRecipe = new CraftingSolverRecipe(id, inputItems, outputItem);
+        }
+        
+        
+        public bool IsDestroy { get; private set; }
+        public void Destroy()
+        {
+            IsDestroy = true;
+        }
+        
+        public string SaveKey { get; } = typeof(ChainerCrafterComponent).FullName;
+        public string GetSaveState()
+        {
+            return JsonConvert.SerializeObject(new ChainerCrafterComponentJsonObject(this));
+        }
+    }
+    
+    public class ChainerCrafterComponentJsonObject
+    {
+        [JsonProperty("recipe")] public CraftingSolverRecipeJsonObject Recipe { get; set; }
+        [JsonProperty("nodeId")] public int NodeId { get; set; }
+        
+        public ChainerCrafterComponentJsonObject(ChainerCrafterComponent component)
+        {
+            Recipe = new CraftingSolverRecipeJsonObject(component.CraftingSolverRecipe);
+            NodeId = component.NodeId.AsPrimitive();
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Computer/CraftChainerManager.cs
+```cs
+using System.Collections.Generic;
+using Game.Block.Interface.Extension;
+using Game.Context;
+using Game.CraftChainer.BlockComponent.Computer;
+using Game.World.Interface.DataStore;
+using UniRx;
+
+namespace Game.CraftChainer.CraftNetwork
+{
+    public class CraftChainerManager
+    {
+        public static CraftChainerManager Instance;
+        
+        private readonly List<ChainerMainComputerComponent> _mainComputers = new();
+        
+        public CraftChainerManager()
+        {
+            Instance = this;
             
-            // アウトプットアイテムの出力個数を取得
-            foreach (var outputItem in recipeMasterElement.OutputItems)
+            ServerContext.WorldBlockUpdateEvent.OnBlockPlaceEvent.Subscribe(OnBlockPlaceEvent);
+            ServerContext.WorldBlockUpdateEvent.OnBlockRemoveEvent.Subscribe(OnBlockRemoveEvent);
+        }
+        
+        private void OnBlockPlaceEvent(BlockUpdateProperties updateProperties)
+        {
+            var block = updateProperties.BlockData.Block;
+            if (block.TryGetComponent<ChainerMainComputerComponent>(out var mainComputer))
             {
-                var outputItemId = MasterHolder.ItemMaster.GetItemId(outputItem.ItemGuid);
-                if (targetCraftChainItem.ItemId == outputItemId)
+                _mainComputers.Add(mainComputer);
+            }
+            if (block.ExistsComponent<ICraftChainerNode>())
+            {
+                foreach (var computer in _mainComputers)
                 {
-                    outputCount = outputItem.Count;
-                    break;
+                    computer.ChainerNetworkContext.ReSearchNetwork();
+                }
+            }
+        }
+        
+        private void OnBlockRemoveEvent(BlockUpdateProperties updateProperties)
+        {
+            var block = updateProperties.BlockData.Block;
+            if (block.TryGetComponent<ChainerMainComputerComponent>(out var mainComputer))
+            {
+                _mainComputers.Remove(mainComputer);
+            }
+            if (block.ExistsComponent<ICraftChainerNode>())
+            {
+                foreach (var computer in _mainComputers)
+                {
+                    computer.ChainerNetworkContext.ReSearchNetwork();
+                }
+            }
+        }
+        
+        
+        public ChainerNetworkContext GetChainerNetworkContext(CraftChainerNodeId nodeId)
+        {
+            foreach (var mainComputer in _mainComputers)
+            {
+                if (mainComputer.ChainerNetworkContext.IsExistNode(nodeId))
+                {
+                    return mainComputer.ChainerNetworkContext;
                 }
             }
             
-            if (outputCount == -1)
-            {
-                var itemGuid = MasterHolder.ItemMaster.GetItemMaster(targetCraftChainItem.ItemId);
-                throw new Exception($"指定しているアイテムをアウトプットしない機械レシピでした。レシピGUID：{recipeMasterElement.MachineRecipeGuid} アイテムGUID：{itemGuid}");
-            }
-            
-            return outputCount / targetCraftChainItem.Count;
+            return null;
         }
     }
 }
 ```
 
-moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChain/CraftChainTreeNode.cs
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Computer/ChainerNetworkContext.cs
 ```cs
 using System.Collections.Generic;
 using Core.Item.Interface;
 using Core.Master;
-
-namespace Game.CraftChainer
-{
-    public class CraftChainTreeNode : ICraftChainTreeNode
-    {
-        /// <summary>
-        /// このクラフトによって作られるアイテム
-        /// </summary>
-        public List<CraftChainItem> ResultItems { get; }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        public Dictionary<ItemId, List<RequiredItemProperty>> RequiredItems { get; }
-        
-        public string CraftRecipeType { get; }
-        // TODO レシピの実態をホールド
-        
-        public CraftChainTreeNode(string craftRecipeType, List<CraftChainItem> resultItems, Dictionary<ItemId, List<RequiredItemProperty>> requiredItems)
-        {
-            CraftRecipeType = craftRecipeType;
-            ResultItems = resultItems;
-            RequiredItems = requiredItems;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChain/ICraftChainTreeNode.cs
-```cs
-using System.Collections.Generic;
-using Core.Item.Interface;
-using Core.Master;
+using Game.Block.Component;
+using Game.Block.Interface;
+using Game.Block.Interface.Component;
+using Game.Block.Interface.Extension;
+using Game.CraftChainer.BlockComponent.Crafter;
+using Game.CraftChainer.BlockComponent.ProviderChest;
+using Game.CraftChainer.CraftChain;
 using Game.CraftChainer.CraftNetwork;
-
-namespace Game.CraftChainer
-{
-    /// <summary>
-    /// あるアイテムを作るために必要なレシピの連鎖、中間素材の作成の連鎖をツリーで表現したInterface
-    /// </summary>
-    public interface ICraftChainTreeNode
-    {
-        public const string CraftRecipe = "CraftRecipe";
-        public const string MachineRecipe = "MachineRecipe";
-        
-        public string CraftRecipeType { get; }
-        
-        public List<CraftChainItem> ResultItems { get; }
-        public Dictionary<ItemId, List<RequiredItemProperty>> RequiredItems{ get; }
-    }
-    
-    public struct RequiredItemProperty
-    {
-        public CraftChainItem CraftItem { get; }
-        public ICraftChainTreeNode Node { get;  }
-        
-        public RequiredItemProperty(CraftChainItem craftItem, ICraftChainTreeNode node)
-        {
-            CraftItem = craftItem;
-            Node = node;
-        }
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.CraftChainer/CraftChain/CraftChainTreeBuilder.cs
-```cs
-using System.Collections.Generic;
-using Core.Master;
-using Game.CraftChainer.Util;
 using UnityEngine;
 
-namespace Game.CraftChainer
+namespace Game.CraftChainer.BlockComponent.Computer
 {
-    public class CraftChainTreeBuilder
+    public class ChainerNetworkContext
     {
-        private readonly ItemRecipeViewerDataContainer _itemRecipeViewerDataContainer;
-
-        public CraftChainTreeBuilder(ItemRecipeViewerDataContainer itemRecipeViewerDataContainer)
+        // チェインネットワークに関する情報
+        // Information about the chain network
+        public IReadOnlyList<ChainerProviderChestComponent> ProviderChests => _providerChests;
+        private readonly List<ChainerProviderChestComponent> _providerChests = new();
+        public IReadOnlyList<ChainerCrafterComponent> CrafterComponents => _crafterComponents;
+        private readonly List<ChainerCrafterComponent> _crafterComponents = new();
+        private readonly Dictionary<CraftChainerNodeId, ICraftChainerNode> _nodes = new();
+        
+        // このコンテキストを保持するメインコンピューターの情報
+        // Information about the main computer that holds this context
+        private readonly BlockConnectorComponent<IBlockInventory> _mainComputerConnector; 
+        private readonly ICraftChainerNode _mainComputerNode;
+        
+        // 現在クラフト中のアイテム情報
+        // Information about the item currently being crafted
+        private readonly Dictionary<ItemInstanceId,CraftChainerNodeId> _requestedMoveItems = new();
+        private Dictionary<ItemId,(CraftChainerNodeId targetNodeId, int reminderCount)> _craftChainRecipeQue;
+        public ChainerNetworkContext(BlockConnectorComponent<IBlockInventory> mainComputerConnector, ICraftChainerNode mainComputerNode)
         {
-            _itemRecipeViewerDataContainer = itemRecipeViewerDataContainer;
+            _mainComputerConnector = mainComputerConnector;
+            _mainComputerNode = mainComputerNode;
         }
-
-        public List<ICraftChainTreeNode> BuildCraftChainTree(CraftChainItem targetCraftChainItem)
+        
+        public bool IsExistNode(CraftChainerNodeId nodeId)
         {
-            // TODO ループ検知
-            // TODO 原材料の場合はそれも検知させる
+            return _nodes.ContainsKey(nodeId);
+        }
+        
+        public void SetCraftChainRecipeQue(Dictionary<CraftingSolverRecipeId, int> solvedResults)
+        {
+            var craftRecipeIdMap = GetCraftRecipeIdMap();
             
-            var result = new List<ICraftChainTreeNode>();
+            _craftChainRecipeQue = CreateRecipeQue(solvedResults, craftRecipeIdMap);
             
-            // クラフトのレシピの取得
-            var recipes = _itemRecipeViewerDataContainer.GetItem(targetCraftChainItem.ItemId);
-            foreach (var craftRecipe in recipes.CraftRecipes)
+            #region Internal
+            
+            Dictionary<CraftingSolverRecipeId, ChainerCrafterComponent> GetCraftRecipeIdMap()
             {
-                var requireCraftChainItems = craftRecipe.ToRequireCraftChainItems(targetCraftChainItem);
-                var requireItems = new Dictionary<ItemId, List<RequiredItemProperty>>();
-                foreach (var craftChain in requireCraftChainItems)
+                var map = new Dictionary<CraftingSolverRecipeId, ChainerCrafterComponent>();
+                foreach (var crafter in _crafterComponents)
                 {
-                    var childrenNodes = BuildCraftChainTree(craftChain);
-                    foreach (var childNode in childrenNodes)
+                    map[crafter.CraftingSolverRecipe.CraftingSolverRecipeId] = crafter;
+                }
+                return map;
+            }
+            
+            Dictionary<ItemId, (CraftChainerNodeId targetNodeId, int reminderCount)> CreateRecipeQue(Dictionary<CraftingSolverRecipeId, int> solved, Dictionary<CraftingSolverRecipeId, ChainerCrafterComponent> recipes)
+            {
+                var result = new Dictionary<ItemId, (CraftChainerNodeId targetNodeId, int reminderCount)>();
+                foreach (var solvedResult in solved)
+                {
+                    var crafter = recipes[solvedResult.Key];
+                    var recipe = crafter.CraftingSolverRecipe;
+                    foreach (var inputItems in recipe.Inputs)
                     {
-                        var requiredItem = new RequiredItemProperty(craftChain, childNode);
-                        if (requireItems.TryGetValue(craftChain.ItemId , out var list))
+                        if (result.TryGetValue(inputItems.ItemId, out var que))
                         {
-                            list.Add(requiredItem);
+                            que.reminderCount += inputItems.Quantity;
                         }
                         else
                         {
-                            requireItems.Add(craftChain.ItemId, new List<RequiredItemProperty> { requiredItem });
+                            result[inputItems.ItemId] = (crafter.NodeId, inputItems.Quantity);
                         }
                     }
                 }
                 
-                var results = craftRecipe.ToResultCraftChainItems(targetCraftChainItem);
-                result.Add(new CraftChainTreeNode(ICraftChainTreeNode.CraftRecipe, results, requireItems));
+                return result;
             }
             
-            // 機械加工のレシピの取得
-            foreach (var machineRecipe in recipes.MachineRecipes)
+            #endregion
+        }
+        
+        /// <summary>
+        /// クラフトチェインのネットワークを再検索する
+        /// Re-search the network of the craft chain
+        /// </summary>
+        public void ReSearchNetwork()
+        {
+            _providerChests.Clear();
+            _nodes.Clear();
+            
+            _nodes.Add(_mainComputerNode.NodeId, _mainComputerNode);
+            
+            // 単純に深さ優先探索で探索し、途中にあったチェストをリストに追加
+            // Simply search by depth-first search and add the chests found on the way to the list
+            Search(_mainComputerConnector);
+            
+            #region Internal
+            
+            void Search(BlockConnectorComponent<IBlockInventory> connector)
             {
-                foreach (var recipeMaster in machineRecipe.Value)
+                foreach (var connectedTarget in connector.ConnectedTargets)
                 {
-                    // 目的のアイテムの製造個数をチェックする
-                    var requireCraftChainItems = recipeMaster.ToRequireMachineChainItems(targetCraftChainItem);
-                    var requireItems = new Dictionary<ItemId, List<RequiredItemProperty>>();
-                    foreach (var craftChain in requireCraftChainItems)
+                    var targetBlock = connectedTarget.Value.TargetBlock;
+                    if (!targetBlock.TryGetComponent<ICraftChainerNode>(out var node))
                     {
-                        var childrenNodes = BuildCraftChainTree(craftChain);
-                        foreach (var childNode in childrenNodes)
-                        {
-                            var requiredItem = new RequiredItemProperty(craftChain, childNode);
-                            if (requireItems.TryGetValue(craftChain.ItemId , out var list))
-                            {
-                                list.Add(requiredItem);
-                            }
-                            else
-                            {
-                                requireItems.Add(craftChain.ItemId, new List<RequiredItemProperty> { requiredItem });
-                            }
-                        }
+                        continue;
+                    }
+                    if (!_nodes.TryAdd(node.NodeId, node))
+                    {
+                        continue;
                     }
                     
-                    // リザルトのアイテムを作成する
-                    var resultItem = recipeMaster.ToResultMachineChainItems(targetCraftChainItem);
-                    result.Add(new CraftChainTreeNode(ICraftChainTreeNode.MachineRecipe, resultItem, requireItems));
+                    if (targetBlock.TryGetComponent<ChainerProviderChestComponent>(out var chest))
+                    {
+                        _providerChests.Add(chest);
+                    }
+                    if (targetBlock.TryGetComponent<ChainerCrafterComponent>(out var crafter))
+                    {
+                        _crafterComponents.Add(crafter);
+                    }
+                    if (targetBlock.TryGetComponent<BlockConnectorComponent<IBlockInventory>>(out var nextConnector))
+                    {
+                        Search(nextConnector);
+                    }
                 }
             }
             
-            return result;
+            #endregion
         }
-    }
-}
-
-```
-
-moorestech_server/Assets/Scripts/Game.CraftChainer/CraftNetwork/CraftChainerItem.cs
-```cs
-namespace Game.CraftChainer.CraftNetwork
-{
-    public class CraftChainerItem
-    {
-        public CraftChainerNodeId TargetNodeId { get; } // TODO クラフト中にネットワークが変更されたときのことを考えておく
         
         
-    }
-}
-```
-
-moorestech_server/Assets/Scripts/Game.CraftChainer/CraftNetwork/Node/CraftChain.cs
-```cs
-namespace Game.CraftChainer.CraftNetwork.Node
-{
-    public class CraftChain
-    {
-        private readonly CraftChainTreeBuilder _craftChainTreeBuilder;
-        
-        public void RequestItem(CraftChainItem craftChainItem)
+        /// <summary>
+        /// アイテムのIDとつながっているコネクターから、次にインサートすべきブロックを取得する
+        /// Get the next block to insert from the connector connected to the item ID
+        /// </summary>
+        public IBlockInventory GetTransportNextBlock(IItemStack item, CraftChainerNodeId startChainerNodeId, BlockConnectorComponent<IBlockInventory> blockConnector)
         {
-            // TODO クラフトノードを構築
-            // TODO 使えるクラフトチャートを選定する
+            var targetNodeId = GetTargetNodeId(item);
+            if (targetNodeId == CraftChainerNodeId.Invalid)
+            {
+                return null;
+            }
             
-            // TODO クラフトをノードの橋から実行
+            var result = ExecuteBfs(targetNodeId);
+            if (result == null || result.Count == 0)
+            {
+                return null;
+            }
+            
+            return result[0];
+            
+            #region Internal
+            
+            CraftChainerNodeId GetTargetNodeId(IItemStack item)
+            {
+                // 移動先が既に指定されている場合はそのまま返す
+                // If the destination is already specified, return it as it is
+                if (_requestedMoveItems.TryGetValue(item.ItemInstanceId, out var nodeId))
+                {
+                    return nodeId;
+                }
+                
+                // 現在のアイテムがクラフト対象の材料だったら
+                // If the current item is a crafting target material
+                if (_craftChainRecipeQue.TryGetValue(item.Id, out var craftQue))
+                {
+                    var newCraftQue = craftQue;
+                    newCraftQue.reminderCount--;
+                    if (newCraftQue.reminderCount <= 0)
+                    {
+                        _craftChainRecipeQue.Remove(item.Id);
+                    }
+                    else
+                    {
+                        _craftChainRecipeQue[item.Id] = newCraftQue;
+                    }
+                    
+                    // 計算したアイテムの移動先を保持
+                    // Keep the destination of the calculated item
+                    _requestedMoveItems[item.ItemInstanceId] = newCraftQue.targetNodeId;
+                    return newCraftQue.targetNodeId;
+                }
+                
+                // 移動先が特に指定されていない場合はIncalidを返す
+                // If no destination is specified, select randomly
+                return CraftChainerNodeId.Invalid;
+            }
+            
+            List<IBlockInventory> ExecuteBfs(CraftChainerNodeId targetNode)
+            {
+                var idToConnector = new Dictionary<CraftChainerNodeId, (BlockConnectorComponent<IBlockInventory> connector, IBlockInventory blockInventory)>();
+                var searchQueue = new Queue<CraftChainerNodeId>();
+                var searched = new HashSet<CraftChainerNodeId>();
+                var reverseSearch = new Dictionary<CraftChainerNodeId, CraftChainerNodeId>();
+                var stepLog = new Dictionary<CraftChainerNodeId, int>();
+                var isFound = false;
+                
+                searchQueue.Enqueue(startChainerNodeId);
+                searched.Add(startChainerNodeId);
+                idToConnector[startChainerNodeId] = (blockConnector, null);
+                stepLog[startChainerNodeId] = 0;
+                
+                // キューがなくなるまでループ
+                // Loop until the queue is empty
+                while (0 < searchQueue.Count)
+                {
+                    var searchingId = searchQueue.Dequeue();
+                    if (searchingId == targetNode)
+                    {
+                        isFound = true;
+                        break;
+                    }
+                    
+                    var step = stepLog[searchingId] + 1;
+                    foreach (var connectedTarget in idToConnector[searchingId].connector.ConnectedTargets)
+                    {
+                        var targetBlock = connectedTarget.Value.TargetBlock;
+                        var next = GetNext(targetBlock);
+                        
+                        // 接続先がChainerNodeではないので無視
+                        // Ignore if the connection destination is not a ChainerNode
+                        if (!next.HasValue) continue;
+                        
+                        var (nodeId, nextConnector, blockInventory) = next.Value;
+                        
+                        // すでに探索済みの場合は無視
+                        // Ignore if already searched
+                        if (searched.Contains(nodeId)) continue;
+                        
+                        searched.Add(nodeId); // Mark as searched before enqueuing
+                        reverseSearch[nodeId] = searchingId;
+                        idToConnector[nodeId] = (nextConnector, blockInventory);
+                        stepLog[nodeId] = step;
+                        searchQueue.Enqueue(nodeId);
+                    }
+                }
+                
+                if (!isFound)
+                {
+                    return null;
+                }
+                
+                // 経路をたどっていく
+                // Follow the path
+                var result = new List<IBlockInventory>();
+                var current = targetNode;
+                while (current != startChainerNodeId)
+                {
+                    result.Add(idToConnector[current].blockInventory);
+                    current = reverseSearch[current];
+                }
+                
+                result.Reverse();
+                return result;
+            }
+            
+            (CraftChainerNodeId nodeId, BlockConnectorComponent<IBlockInventory> connector, IBlockInventory blockInventory)? GetNext(IBlock block)
+            {
+                if (!block.TryGetComponent<ICraftChainerNode>(out var node)) return null;
+                if (node.NodeId == startChainerNodeId) return null;
+                if (!block.TryGetComponent<BlockConnectorComponent<IBlockInventory>>(out var connector)) return null;
+                if (!block.TryGetComponent<IBlockInventory>(out var inventory)) return null;
+                
+                return (node.NodeId, connector, inventory);
+            }
+            
+            #endregion
+        }
+        
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Computer/ChainerMainComputerInserter.cs
+```cs
+using Core.Item.Interface;
+using Game.Block.Blocks.Connector;
+
+namespace Game.CraftChainer.BlockComponent.Computer
+{
+    /// <summary>
+    /// メインコンピューターはアイテムを外に出さないので、そのためのクラス
+    /// The main computer does not take items out, so this class is for that
+    /// </summary>
+    public class ChainerMainComputerInserter : IBlockInventoryInserter
+    {
+        public IItemStack InsertItem(IItemStack itemStack)
+        {
+            return itemStack;
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Game.CraftChainer/BlockComponent/Computer/ChainerMainComputerComponent.cs
+```cs
+using System.Collections.Generic;
+using Core.Master;
+using Game.Block.Component;
+using Game.Block.Interface.Component;
+using Game.CraftChainer.CraftChain;
+using Game.CraftChainer.CraftNetwork;
+using Newtonsoft.Json;
+
+namespace Game.CraftChainer.BlockComponent.Computer
+{
+    public class ChainerMainComputerComponent : ICraftChainerNode
+    {
+        public readonly ChainerNetworkContext ChainerNetworkContext;
+        
+        public CraftChainerNodeId NodeId { get; } = CraftChainerNodeId.Create();
+        
+        public ChainerMainComputerComponent(BlockConnectorComponent<IBlockInventory> mainComputerConnector)
+        {
+            ChainerNetworkContext = new ChainerNetworkContext(mainComputerConnector, this);
+        }
+        
+        public ChainerMainComputerComponent(Dictionary<string, string> componentStates, BlockConnectorComponent<IBlockInventory> mainComputerConnector) : this(mainComputerConnector)
+        {
+            var state = componentStates[SaveKey];
+            var jsonObject = JsonConvert.DeserializeObject<ChainerMainComputerComponentJsonObject>(state);
+            NodeId = new CraftChainerNodeId(jsonObject.NodeId);
+        }
+        
+        /// <summary>
+        /// アイテムのクラフトをリクエストする
+        /// Request to create an item
+        /// </summary>
+        /// <returns>
+        /// クラフトリクエストが成功したかどうか
+        /// Whether the craft request was successful
+        /// </returns>
+        public bool StartCreateItem(ItemId itemId, int count)
+        {
+            var (recipes, initialInventory, targetItem) = CreateInitialData();
+            
+            var solverResult = CraftingSolver.Solve(recipes, initialInventory, targetItem);
+            
+            // アイテムは作成できなかった
+            // The item could not be created
+            if (solverResult == null)
+            {
+                return false;
+            }
+            
+            ChainerNetworkContext.SetCraftChainRecipeQue(solverResult);
+            return true;
+            
+            #region Internal
+            
+            (List<CraftingSolverRecipe> recipes, Dictionary<ItemId, int> initialInventory, CraftingSolverItem targetItem) CreateInitialData()
+            {
+                var recipeResults = new List<CraftingSolverRecipe>();
+                foreach (var crafterComponent in ChainerNetworkContext.CrafterComponents)
+                {
+                    recipeResults.Add(crafterComponent.CraftingSolverRecipe);
+                }
+                
+                var initialInventoryResults = new Dictionary<ItemId, int>();
+                foreach (var chest in ChainerNetworkContext.ProviderChests)
+                {
+                    foreach (var item in chest.Inventory)
+                    {
+                        if (initialInventoryResults.ContainsKey(item.Id))
+                        {
+                            initialInventoryResults[item.Id] += item.Count;
+                        }
+                        else
+                        {
+                            initialInventoryResults[item.Id] = item.Count;
+                        }
+                    }
+                }
+                
+                var target = new CraftingSolverItem(itemId, count);
+                
+                return (recipeResults, initialInventoryResults, target);
+            }
+            
+  #endregion
         }
         
         
-        
-        private CraftChainTreeNode GetEnableCraftChainTree(CraftChainItem targetItem)
+        public bool IsDestroy { get; private set; }
+        public void Destroy()
         {
-            var tree = _craftChainTreeBuilder.BuildCraftChainTree(targetItem);
+            IsDestroy = true;
+        }
+        public string SaveKey { get; } = typeof(ChainerMainComputerComponent).FullName;
+        public string GetSaveState()
+        {
+            return JsonConvert.SerializeObject(new ChainerMainComputerComponentJsonObject(this));
+        }
+    }
+    
+    public class ChainerMainComputerComponentJsonObject
+    {
+        [JsonProperty("nodeId")] public int NodeId { get; set; }
+        
+        public ChainerMainComputerComponentJsonObject(ChainerMainComputerComponent component)
+        {
+            NodeId = component.NodeId.AsPrimitive();
+        }
+    }
+}
+```
+
+moorestech_server/Assets/Scripts/Tests/UnitTest/Game/CraftChainer/CraftChainerSolverTest.cs
+```cs
+using System.Collections.Generic;
+using System.Linq;
+using Core.Master;
+using Game.CraftChainer.CraftChain;
+using NUnit.Framework;
+
+namespace Tests.UnitTest.Game.CraftChainer
+{
+    /// <summary>
+    /// 凡例 legend
+    /// 
+    /// recipesStr
+    /// レシピ番号:アウトプットアイテム名 数量, アウトプットアイテム名 数量 ← インプットアイテム名 数量, インプットアイテム名 数量
+    /// RecipeId:OutputItemName Quantity, OutputItemName Quantity ← InputItemName Quantity, InputItemName Quantity
+    ///
+    /// initialInventoryStr
+    /// アイテム名 数量
+    /// ItemName Quantity
+    ///
+    /// targetItemStr
+    /// アイテム名 数量
+    /// ItemName Quantity
+    ///
+    /// expectedStr
+    /// レシピ番号:使用レシピ回数
+    /// RecipeId:UseRecipeCount
+    /// 
+    /// </summary>
+    public class CraftChainerSolverTest
+    {
+        [Test]
+        public void TestCase01()
+        {
+            var recipesStr = @"
+1:A 1 ← B 1, C 2
+2:B 1 ← C 2";
+            var initialInventoryStr = @"
+B 1";
+            var targetItem = "A 1";
+            var expectedStr = @""; // 解が存在しない場合、期待される結果は空文字列
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase02()
+        {
+            var recipesStr = @"
+1:A 1 ← B 1, C 2
+2:B 1 ← C 2";
+            var initialInventoryStr = @""; // 初期在庫なし
+            var targetItem = "A 1";
+            var expectedStr = @""; // 解が存在しない
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase03()
+        {
+            var recipesStr = @"
+1:D 1 ← E 8
+2:E 4 ← F 2
+3:E 4 ← G 2";
+            var initialInventoryStr = @""; // 初期在庫なし
+            var targetItem = "D 1";
+            var expectedStr = @""; // 解が存在しない
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase04()
+        {
+            var recipesStr = @"
+1:A 1 ← B 2
+2:A 1 ← B 4";
+            var initialInventoryStr = @"
+B 3";
+            var targetItem = "A 1";
+            var expectedStr = @"
+1:1"; // レシピ1を1回使用
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase05()
+        {
+            var recipesStr = @"
+1:A 1 ← B 3
+2:B 1 ← C 2
+3:B 1 ← D 2
+4:D 1 ← E 1";
+            var initialInventoryStr = @"
+C 4
+D 2";
+            var targetItem = "A 1";
+            var expectedStr = @"
+1:1
+2:2
+3:1";
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase06()
+        {
+            var recipesStr = @"
+1:A 1 ← B 2, C 2
+2:C 1 ← D 1
+3:B 1, C 1 ← D 3";
+            var initialInventoryStr = @"
+B 1
+D 10";
+            var targetItem = "A 1";
+            var expectedStr = @"
+1:1
+3:2";
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase07()
+        {
+            var recipesStr = @"
+1:X 1 ← Y 1, Z 1
+2:Y 1 ← W 5
+3:Z 1 ← W 10";
+            var initialInventoryStr = @"
+W 15";
+            var targetItem = "X 1";
+            var expectedStr = @"
+1:1
+2:1
+3:1";
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase08()
+        {
+            var recipesStr = @"
+1:A 1 ← B 2, C 1
+2:A 1 ← B 1, D 2
+3:B 1 ← E 3
+4:C 1 ← E 2
+5:D 1 ← E 1";
+            var initialInventoryStr = @"
+E 10";
+            var targetItem = "A 2";
+            var expectedStr = @"
+2:2
+3:2
+5:4";
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase09()
+        {
+            var recipesStr = @"
+1:A 1 ← B 10
+2:B 1 ← C 5
+3:C 1 ← D 2
+4:D 1 ← E 1";
+            var initialInventoryStr = @"
+C 2
+E 10";
+            var targetItem = "A 1";
+            var expectedStr = @""; // 解が存在しない
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase10()
+        {
+            var recipesStr = @"
+1:A 1 ← B 1
+2:B 3 ← C 2
+3:C 5 ← D 1";
+            var initialInventoryStr = @"
+D 1";
+            var targetItem = "A 1";
+            var expectedStr = @"
+1:1
+2:1
+3:1";
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase11()
+        {
+            var recipesStr = @"
+1:A 1 ← B 1, C 2
+2:B 1 ← D 3
+3:C 1 ← D 2
+4:D 1 ← E 1
+5:B 1 ← F 1
+6:C 1 ← G 1";
+            var initialInventoryStr = @"
+D 1
+F 1
+G 2";
+            var targetItem = "A 1";
+            var expectedStr = @"
+1:1
+5:1
+6:2";
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase12()
+        {
+            var recipesStr = @"
+1:A 1 ← B 1, C 1
+2:B 1 ← C 2
+3:C 1 ← E 1
+4:E 1 ← B 1
+5:B 1 ← D 1";
+            var initialInventoryStr = @"
+D 2";
+            var targetItem = "A 1";
+            var expectedStr = @"
+1:1
+3:1
+4:1
+5:2";
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase13()
+        {
+            var recipesStr = @"
+1:A 1 ← B1 1, B2 1, B3 1, B4 1
+2:B1 1 ← C1 1
+3:B2 1 ← C2 1
+4:B3 1 ← C3 1
+5:B4 1 ← C4 1
+6:C1 1 ← D 1
+7:C2 1 ← D 1
+8:C3 1 ← D 1
+9:C4 1 ← D 1";
+            var initialInventoryStr = @"
+D 5";
+            var targetItem = "A 1";
+            var expectedStr = @"
+1:1
+2:1
+3:1
+4:1
+5:1
+6:1
+7:1
+8:1
+9:1";
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        [Test]
+        public void TestCase14()
+        {
+            var recipesStr = @"
+1:A 1 ← B 2
+2:B 1 ← C 2
+3:B 1 ← D 1";
+            var initialInventoryStr = @"
+C 1
+D 1";
+            var targetItem = "A 1";
+            var expectedStr = @""; // 解が存在しない
+            ExecuteTest(recipesStr, initialInventoryStr, targetItem, expectedStr);
+        }
+        
+        
+        private void ExecuteTest(
+            string recipesStr,
+            string initialInventoryStr,
+            string targetItemStr,
+            string expectedStr)
+        {
+            var (recipes, initialInventory, targetItem, expected) = ParseInput(recipesStr, initialInventoryStr, targetItemStr, expectedStr);
+            var actual = CraftingSolver.Solve(recipes, initialInventory, targetItem);
+            
+            if (expected == null)
+            {
+                Assert.IsNull(actual);
+                return;
+            }
+            
+            Assert.IsNotNull(actual);
+            Assert.AreEqual(expected.Count, actual.Count);
+            
+            foreach (var kvp in expected)
+            {
+                Assert.IsTrue(actual.ContainsKey(kvp.Key));
+                Assert.AreEqual(kvp.Value, actual[kvp.Key]);
+            }
+        }
+        
+        private (List<CraftingSolverRecipe> recipes, Dictionary<ItemId, int> initialInventory, CraftingSolverItem targetItem, Dictionary<CraftingSolverRecipeId, int> expected) ParseInput(
+            string recipesStr,
+            string initialInventoryStr,
+            string targetItemStr,
+            string expectedStr)
+        {
+            var recipes = ParseRecipes();
+            var initialInventory = ParseInitialInventory();
+            var targetItem = ParseTargetItem();
+            var expected = ParseExpected();
+            
+            return (recipes, initialInventory, targetItem, expected);
+            
+            #region Internal
+            
+            List<CraftingSolverRecipe> ParseRecipes()
+            {
+                var result = new List<CraftingSolverRecipe>();
                 
-            // TODO すべての原材料があるかどうかをチェックする
-            // TODO もしなければ、その材料となるアイテムがあるかどうかをチェックする
+                var recipeLines = recipesStr.Split('\n').Where(x => !string.IsNullOrWhiteSpace(x));
+                foreach (var recipeLine in recipeLines)
+                {
+                    var recipeId = new CraftingSolverRecipeId(int.Parse(recipeLine.Split(':')[0]));
+                    var inputItemsStr = recipeLine.Split(':')[1].Split('←')[1].Trim();
+                    var outputItemStr = recipeLine.Split(':')[1].Split('←')[0].Trim();
+                    
+                    var inputItems = ParseRecipeItems(inputItemsStr);
+                    var outputItems = ParseRecipeItems(outputItemStr);
+                    
+                    result.Add(new CraftingSolverRecipe(recipeId, inputItems, outputItems));
+                }
+                
+                return result;
+            }
+            
+            Dictionary<ItemId, int> ParseInitialInventory()
+            {
+                var result = new Dictionary<ItemId, int>();
+                
+                var inventoryLines = initialInventoryStr.Split('\n').Where(x => !string.IsNullOrWhiteSpace(x));
+                foreach (var inventoryLine in inventoryLines)
+                {
+                    var itemName = inventoryLine.Split(' ')[0];
+                    var itemId = new ItemId(GetItemId(itemName));
+                    var quantity = int.Parse(inventoryLine.Split(' ')[1]);
+                    
+                    result.Add(itemId, quantity);
+                }
+                
+                return result;
+            }
+            
+            CraftingSolverItem ParseTargetItem()
+            {
+                var itemName = targetItemStr.Split(' ')[0];
+                var itemId = new ItemId(GetItemId(itemName));
+                var quantity = int.Parse(targetItemStr.Split(' ')[1]);
+                
+                return new CraftingSolverItem(itemId, quantity);
+            }
+            
+            Dictionary<CraftingSolverRecipeId, int> ParseExpected()
+            {
+                var result = new Dictionary<CraftingSolverRecipeId, int>();
+                
+                var expectedLines = expectedStr.Split('\n').Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                if (expectedLines.Count == 0)
+                {
+                    return null;
+                }
+                
+                foreach (var expectedLine in expectedLines)
+                {
+                    var recipeId = new CraftingSolverRecipeId(int.Parse(expectedLine.Split(':')[0]));
+                    var quantity = int.Parse(expectedLine.Split(':')[1]);
+                    
+                    result.Add(recipeId, quantity);
+                }
+                
+                return result;
+            }
+            
+            List<CraftingSolverItem> ParseRecipeItems(string itemRecipes)
+            {
+                var result = new List<CraftingSolverItem>();
+                foreach (var item in itemRecipes.Split(','))
+                {
+                    var trimItem = item.Trim();
+                    var itemName = trimItem.Split(' ')[0];
+                    var itemId = new ItemId(GetItemId(itemName));
+                    var quantity = int.Parse(trimItem.Split(' ')[1]);
+                    
+                    result.Add(new CraftingSolverItem(itemId, quantity));
+                }
+                return result;
+            }
+            
+  #endregion
+        }
+        
+        private int _nextItemId = 1;
+        private Dictionary<string, int> _itemNameToId = new();
+        
+        private int GetItemId(string itemName)
+        {
+            // アイテム名をユニークなIDにマッピングするメソッド
+            // ここでは簡単のために静的な辞書を使用
+            if (!_itemNameToId.TryGetValue(itemName, out var itemId))
+            {
+                itemId = _nextItemId++;
+                _itemNameToId[itemName] = itemId;
+            }
+            return itemId;
         }
     }
 }
@@ -2629,57 +2708,17 @@ namespace Game.CraftChainer.CraftNetwork.Node
 また、コードを出力する際は細切れにせず、基本的に全文を出力するようにしてください。
 
 # Instructions
- # ロジパイプ仕様
+```
+SimpleChainerTest (10.024s)
+---
+Failed to create item
+---
+at Tests.CombinedTest.Game.CraftChainerTest.SimpleChainerTest () [0x000e1] in /Users/katsumi.sato/moorestech/moorestech_server/Assets/Scripts/Tests/CombinedTest/Game/CraftChainerTest.cs:90
+---
+ID:37 Count:1
+(2, 0, 1) Type: CraftChainerTransporter Slot: 0, ItemName: "Chainer - C" Count: 1
+(0, 0, 2) Type: CraftChainerProviderChest Slot: 0, ItemName: "Chainer - C" Count: 4
+```
 
-# 概要
-
-MinecraftのLogicstcs pipeというmodをベースにしたオンデマンドクラフトシステム
-
-アイテムが注文されたときに、ロジスティクスパイプネットワークに登録されている機械を使用して中間素材を含むアイテムを次々と作成し、必要なアイテムを必要な量、必要なときにお届けするシステムである。
-
-このシステムは「ロジパイプネットワーク」を構築することで作成、稼働させることができる。
-
-ロジパイプネットワークはロジパイプを構築している一つの機械ネットワークである。このネットワークはノードが機械となり、そのリンクがアイテム輸送路となる。機械同士がアイテム輸送路でつながり、必要なアイテムを必要なだけ生産し、適切な機械に届けて加工を行うという役割を果たす。
-
-# ロジパイプネットワークの基本要素
-
-- ロジパイプコンピューター
-- ストレージ
-- 加工機械
-- ロジパイプ専用アイテム輸送路
-
-## ロジパイプコンピューター
-
-ロジパイプネットワークの中でアイテムの受注を請負い、現在のストレージに入っているアイテム量で足りるか、足りない素材はなにか、加工機械は足りているか、を判断し、どのアイテムをどの機械に輸送、加工すればいいかを判断する。
-
-また、完成したアイテムを受け取る場所にもなる。
-
-## ストレージ
-
-ロジパイプネットワークの中でアイテムの保存を行う。原材料の供給や、余った中間素材などを保存しておく。
-
-## 加工機械
-
-ロジパイプネットワークの中で、アイテムの加工を担当する。格納されたアイテムを下に、別のアイテムに加工して輸送路に流す。
-
-## ロジパイプ専用アイテム輸送路
-
-ロジスティクス・ネットワークを構築するためのアイテムの輸送路。輸送路内でアイテム同士が重なったり、並行交差はせず、一方通行となっている。そのため、最低限、センターコンソールを起点に上り輸送路と下り輸送路を用意し、それぞれのアイテム輸送路を繋ぐ必要がある。
-
-# 命令
-
-上記のロジパイプシステムを実現するために、 CraftChainTreeNode GetEnableCraftChainTree(CraftChainItem targetItem) を実装したいと思っています。
-
-
- このメソッドはクラフトチェインのツリーを参考に、作れるクラフトチェインのツリーを探索し、返すメソッドです。
-
- 探索の方法、条件は以下のとおりです。
- - すべてのツリーの最下部まで探索し、必要なアイテムの種類と数を洗い出す。
- - その過程で、中間素材があるのであれば、その中間素材を使うため、中間素材を作成するための原材料は不要である。
- - 例えば A-1 <- B-1,C-2 と B-1 <- C-2 というレシピがあったときに、Aを1個作るためにはBが1個、Cが2個必要であり、Bを1個作るためにはCが2個必要となる。
-   - このとき、もし既にBが1個存在すれば、Aを作るための要求量はBが1個、Cが2個となる。
-   - もしBが存在しない場合、Aを作るためにはCが4個必要となる。
- - もしD-1 <- E-8, E-4 <- F-2, E-4 <- G-2 というレシピの場合、Fが4個、Gが4個、Fが2個とGが2個あるときに作成が可能となる。
-
-これらの条件を満たすように、クラフトチェインツリーのチェックを実装したいです。
-ただし、そのアイテムが有るかどうかといった実装は今行う必要はありません。細かい実装物は後回しにして、まずはこのロジックを実現できるアルゴリズムを考え、そのアルゴリズムを落とし込んだコードを記述してください。
+CraftChainerTestのSimpleChainerTestが失敗しています。
+失敗したときのログは上記になっています。
