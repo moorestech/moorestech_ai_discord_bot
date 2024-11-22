@@ -1,14 +1,1 @@
-```
-SimpleChainerTest (10.024s)
----
-Failed to create item
----
-at Tests.CombinedTest.Game.CraftChainerTest.SimpleChainerTest () [0x000e1] in /Users/katsumi.sato/moorestech/moorestech_server/Assets/Scripts/Tests/CombinedTest/Game/CraftChainerTest.cs:90
----
-ID:37 Count:1
-(2, 0, 1) Type: CraftChainerTransporter Slot: 0, ItemName: "Chainer - C" Count: 1
-(0, 0, 2) Type: CraftChainerProviderChest Slot: 0, ItemName: "Chainer - C" Count: 4
-```
-
-CraftChainerTestのSimpleChainerTestが失敗しています。
-失敗したときのログは上記になっています。
+Please write the test code for the SaveLoad of the CraftChainerCrafter block, referring to the test code for the SaveLoad of other blocks.

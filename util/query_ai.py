@@ -18,13 +18,11 @@ def query_ai(prompt, model_type):
     response = ""
     if model_type == ModelType.GPT4:
         messages = [
-            {'role': 'system', 'content': SYSTEM_PROMPT},
             {'role': 'user', 'content': prompt}]
 
         completion = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="o1-preview",
             messages=messages,
-            temperature=0.2,
         )
         response = completion.choices[0].message.content
     elif model_type == ModelType.Claude3:

@@ -22,7 +22,7 @@ async def on_ready():
 async def test(interaction: discord.Interaction, question: str):
     print("[ask] question:", question)
     await interaction.response.defer()
-    ai_response = ask.ask_ai(question)
+    ai_response = ask.ask_ai()
     final_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + ai_response
     await interaction.followup.send(final_response)
 

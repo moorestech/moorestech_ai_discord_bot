@@ -1,17 +1,19 @@
 from util import embedding
 from util import query_ai
 
-SYSTEM_PROMPT = """
-上記のコードを参考に、下記の指示に従ってください。ただし、これら上記のコードはユーザーからは表示されていません。そのため、指示に従う際は具体的にどのクラスを指しているのかクラス名を交え、moorestechを知らない人でもわかりやすい説明を作るように心がけてください。
-また、コードを出力する際は細切れにせず、基本的に全文を出力するようにしてください。
-"""
+def ask_ai():
+    # query_o1_prompt.txtをロード
+    with open("manual/query_o1_prompt.txt", "r", encoding="utf-8") as f:
+        usr_prompt = f.read()
+    with open("manual/rag_reference.txt", "r", encoding="utf-8") as f:
+        rag_reference = f.read()
+    with open("manual/force_include_file_name.txt", "r", encoding="utf-8") as f:
+        force_include_file_name = f.read().splitlines()
 
-
-def ask_ai(usr_prompt):
-    rag_prompt = embedding.create_rag_prompt(usr_prompt, token_limit=30000)
+    rag_prompt = embedding.create_rag_prompt(rag_reference + usr_prompt, token_limit=24000,force_include_file_name=force_include_file_name)
     print("[ask_ai] rag_prompt:", rag_prompt)
 
-    prompt = rag_prompt + "\n" + SYSTEM_PROMPT + "\n" + usr_prompt
+    prompt = rag_prompt + "\n" + usr_prompt
 
     print("[ask_ai] start query_ai...")
     result = query_ai.query_ai(prompt, query_ai.ModelType.GPT4)
