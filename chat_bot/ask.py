@@ -11,7 +11,7 @@ def ask_ai():
         force_include_file_name = f.read().splitlines()
 
     rag_prompt = embedding.create_rag_prompt(rag_reference + usr_prompt, token_limit=24000,force_include_file_name=force_include_file_name)
-    print("[ask_ai] rag_prompt:", rag_prompt)
+    #print("[ask_ai] rag_prompt:", rag_prompt)
 
     prompt = rag_prompt + "\n" + usr_prompt
 

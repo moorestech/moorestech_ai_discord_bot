@@ -3,7 +3,7 @@ import os
 import anthropic
 from openai import OpenAI
 
-SYSTEM_PROMPT = "This is part of the moorestech code. Please refer to this and follow the instructions."
+SYSTEM_PROMPT = "これは moorestech コードの一部です。これを参照して指示に従ってください。また、1500字程度で簡潔に回答してください。"
 
 openai_client = OpenAI()
 claude_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -18,7 +18,7 @@ def query_ai(prompt, model_type):
     response = ""
     if model_type == ModelType.GPT4:
         messages = [
-            {'role': 'user', 'content': prompt}]
+            {'role': 'user', 'content': SYSTEM_PROMPT + prompt}]
 
         completion = openai_client.chat.completions.create(
             model="gpt-4o-2024-11-20",

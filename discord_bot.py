@@ -26,6 +26,8 @@ async def test(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
     ai_response = ask.ask_ai()
     final_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + ai_response
+    # 2000字に収まるように調整
+    final_response = final_response[:2000]
     await interaction.followup.send(final_response)
 
 
