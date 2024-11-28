@@ -3,6 +3,8 @@ from chat_bot import ask
 from discord import app_commands
 import discord
 
+from keep_alive import keep_alive
+
 intents = discord.Intents.default()
 intents.message_content = True  # メッセージの内容を取得する権限
 
@@ -27,4 +29,5 @@ async def test(interaction: discord.Interaction, question: str):
     await interaction.followup.send(final_response)
 
 
+keep_alive()
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
