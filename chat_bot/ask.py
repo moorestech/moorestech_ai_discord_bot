@@ -10,7 +10,7 @@ async def ask_ai_stream(usr_prompt):
 
     rag_prompt = embedding.create_rag_prompt(
         rag_reference + usr_prompt,
-        token_limit=10000,
+        token_limit=0,
         force_include_file_name=force_include_file_name
     )
 

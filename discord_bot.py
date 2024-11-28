@@ -1,4 +1,5 @@
 import os
+import asyncio
 from chat_bot import ask
 from discord import app_commands
 import discord
@@ -26,9 +27,37 @@ async def test(interaction: discord.Interaction, question: str):
     response_message = await interaction.followup.send("回答を生成しています...")
 
     collected_response = ""
-    async for chunk in ask.ask_ai_stream(question):
-        collected_response += chunk
-        # 2000字に収まるように調整
+
+    # 定期的にメッセージを更新するタスクを定義
+    async def update_message():
+        print("Starting update task")
+        while True:
+            print("Updating message")
+            # 2000字に収まるように調整
+            display_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + collected_response[:2000]
+            try:
+                await response_message.edit(content=display_response)
+            except Exception as e:
+                print("Error updating message:", e)
+            await asyncio.sleep(0.5)  # 0.5秒ごとに更新
+
+    # メッセージ更新タスクをバックグラウンドで開始
+    update_task = asyncio.create_task(update_message())
+
+    try:
+        async for chunk in ask.ask_ai_stream(question):
+            collected_response += chunk
+            # ここではeditを待たない
+    except Exception as e:
+        print("Error in streaming response:", e)
+    finally:
+        # タスクをキャンセルして最終更新
+        update_task.cancel()
+        try:
+            await update_task
+        except asyncio.CancelledError:
+            pass
+        # 最終的なメッセージを更新
         display_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + collected_response[:2000]
         await response_message.edit(content=display_response)
 
