@@ -40,8 +40,9 @@ def query_ai(prompt, model_type):
 
 async def query_ai_stream_gpt4(prompt):
     messages = [{'role': 'user', 'content': SYSTEM_PROMPT + prompt}]
+    print(prompt)
     stream = openai_client.chat.completions.create(
-        model="gpt-4o-2024-11-20",
+        model="gpt-4o",
         messages=messages,
         stream=True,
     )
