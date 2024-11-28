@@ -48,7 +48,7 @@ async def test(interaction: discord.Interaction, question: str):
                 await response_message.edit(content=display_response)
             except Exception as e:
                 print("Error updating message:", e)
-            await asyncio.sleep(0.5)  # 0.5秒ごとに更新
+            await asyncio.sleep(0.2)
 
         # 最後の更新
         while not response_queue.empty():
