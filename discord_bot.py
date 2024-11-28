@@ -1,4 +1,3 @@
-import asyncio
 import os
 from chat_bot import ask
 from discord import app_commands
@@ -25,7 +24,13 @@ async def test(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
 
     response_message = await interaction.followup.send("回答を生成しています...")
-    result = asyncio.run(ask.run_ask_ai_stream(response_message, question))
+
+    collected_response = ""
+    async for chunk in ask.ask_ai_stream(question):
+        collected_response += chunk
+        # 2000字に収まるように調整
+        display_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + collected_response[:2000]
+        await response_message.edit(content=display_response)
 
 keep_alive()
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
