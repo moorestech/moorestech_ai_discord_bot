@@ -21,7 +21,7 @@ def query_ai(prompt, model_type):
             {'role': 'user', 'content': prompt}]
 
         completion = openai_client.chat.completions.create(
-            model="o1-preview",
+            model="gpt-4o-2024-11-20",
             messages=messages,
         )
         response = completion.choices[0].message.content
