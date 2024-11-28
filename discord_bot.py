@@ -1,5 +1,7 @@
 import os
 import asyncio
+import threading
+import queue
 from chat_bot import ask
 from discord import app_commands
 import discord
@@ -27,12 +29,19 @@ async def test(interaction: discord.Interaction, question: str):
     response_message = await interaction.followup.send("回答を生成しています...")
 
     collected_response = ""
+    response_queue = queue.Queue()
+    response_complete = asyncio.Event()
 
     # 定期的にメッセージを更新するタスクを定義
     async def update_message():
+        nonlocal collected_response
         print("Starting update task")
-        while True:
+        while not response_complete.is_set():
             print("Updating message")
+            # キューから新しいチャンクを取得
+            while not response_queue.empty():
+                chunk = response_queue.get()
+                collected_response += chunk
             # 2000字に収まるように調整
             display_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + collected_response[:2000]
             try:
@@ -41,25 +50,48 @@ async def test(interaction: discord.Interaction, question: str):
                 print("Error updating message:", e)
             await asyncio.sleep(0.5)  # 0.5秒ごとに更新
 
+        # 最後の更新
+        while not response_queue.empty():
+            chunk = response_queue.get()
+            collected_response += chunk
+        display_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + collected_response[:2000]
+        try:
+            await response_message.edit(content=display_response)
+        except Exception as e:
+            print("Error updating message:", e)
+
     # メッセージ更新タスクをバックグラウンドで開始
     update_task = asyncio.create_task(update_message())
 
-    try:
-        async for chunk in ask.ask_ai_stream(question):
-            collected_response += chunk
-            # ここではeditを待たない
-    except Exception as e:
-        print("Error in streaming response:", e)
-    finally:
-        # タスクをキャンセルして最終更新
-        update_task.cancel()
+    # ブロッキング処理を別スレッドで実行
+    def blocking_collect_response():
         try:
-            await update_task
-        except asyncio.CancelledError:
-            pass
-        # 最終的なメッセージを更新
-        display_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + collected_response[:2000]
-        await response_message.edit(content=display_response)
+            # 新しいイベントループを作成
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            async def async_collect():
+                async for chunk in ask.ask_ai_stream(question):
+                    response_queue.put(chunk)
+            loop.run_until_complete(async_collect())
+            loop.close()
+        except Exception as e:
+            print("Error in streaming response:", e)
+        finally:
+            # 完了を通知
+            response_complete.set()
+
+    thread = threading.Thread(target=blocking_collect_response)
+    thread.start()
+
+    # 完了イベントを待機
+    await response_complete.wait()
+
+    # タスクをキャンセルして最終更新
+    await update_task
+
+    # 最終的なメッセージを更新（念のため）
+    display_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + collected_response[:2000]
+    await response_message.edit(content=display_response)
 
 keep_alive()
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
