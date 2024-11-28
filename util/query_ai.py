@@ -1,5 +1,4 @@
 import os
-
 import anthropic
 from openai import OpenAI
 
@@ -10,15 +9,14 @@ claude_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 
 class ModelType:
-    GPT4 = 1,
-    Claude3 = 2,
+    GPT4 = 1
+    Claude3 = 2
 
 
 def query_ai(prompt, model_type):
     response = ""
     if model_type == ModelType.GPT4:
-        messages = [
-            {'role': 'user', 'content': SYSTEM_PROMPT + prompt}]
+        messages = [{'role': 'user', 'content': SYSTEM_PROMPT + prompt}]
 
         completion = openai_client.chat.completions.create(
             model="gpt-4o-2024-11-20",
@@ -39,3 +37,18 @@ def query_ai(prompt, model_type):
         response = message.content[0].text
 
     return response
+
+async def query_ai_stream_gpt4(prompt):
+    messages = [{'role': 'user', 'content': SYSTEM_PROMPT + prompt}]
+    stream = openai_client.chat.completions.create(
+        model="gpt-4o-2024-11-20",
+        messages=messages,
+        stream=True,
+    )
+
+    for chunk in stream:
+        content = chunk.choices[0].delta.content
+        if content is not None:
+            print(content, end="")
+            yield content
+
