@@ -19,10 +19,10 @@ force_include_file_name = []
 with open("manual/force_include_file_name.txt", "r", encoding="utf-8") as f:
     force_include_file_name = f.read().splitlines()
 
-prompt = embedding.create_rag_prompt(rag_reference + usr_prompt, token_limit=24000, force_include_file_name=force_include_file_name)
+prompt = embedding.create_rag_prompt(rag_reference + usr_prompt, token_limit=95000, force_include_file_name=force_include_file_name)
 
 prompt += "\n# Instructions\n" + usr_prompt
 
 # o1_prompt.txt に書き込む
-with open("o1_prompt.txt", "w", encoding="utf-8") as f:
+with open("manual/o1_prompt.txt", "w", encoding="utf-8") as f:
     f.write(prompt)
