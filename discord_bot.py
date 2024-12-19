@@ -96,13 +96,13 @@ async def test(interaction: discord.Interaction, question: str):
     await response_message.edit(content=display_response)
 
 @tree.command(name='get_rag_prompt', description='ChatGPTに入れるRAGプロンプトを取得します。')
-@discord.app_commands.describe(question="質問内容")
-async def ask_get_file(interaction: discord.Interaction, question: str):
+@discord.app_commands.describe(question="質問内容", token_limit="プロンプト生成時のトークン数制限（デフォルト：95000）")
+async def ask_get_file(interaction: discord.Interaction, question: str, token_limit: int = 95000):
     print("[get_rag_prompt] question:", question)
     await interaction.response.defer()
 
     # 回答全体を格納する変数
-    rag_prompt = embedding.create_rag_prompt(question, token_limit=95000)
+    rag_prompt = embedding.create_rag_prompt(question, token_limit=token_limit)
 
     result_prompt = rag_prompt + "\n# Instructions\n" + question
 
