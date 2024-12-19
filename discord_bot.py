@@ -5,8 +5,10 @@ import queue
 from chat_bot import ask
 from discord import app_commands
 import discord
+from io import BytesIO
 
 from keep_alive import keep_alive
+from util import embedding
 
 intents = discord.Intents.default()
 intents.message_content = True  # メッセージの内容を取得する権限
@@ -92,6 +94,22 @@ async def test(interaction: discord.Interaction, question: str):
     # 最終的なメッセージを更新（念のため）
     display_response = "# 質問\n\n" + question + "\n\n# 回答\n\n" + collected_response[:2000]
     await response_message.edit(content=display_response)
+
+@tree.command(name='get_rag_prompt', description='ChatGPTに入れるRAGプロンプトを取得します。')
+@discord.app_commands.describe(question="質問内容")
+async def ask_get_file(interaction: discord.Interaction, question: str):
+    print("[get_rag_prompt] question:", question)
+    await interaction.response.defer()
+
+    # 回答全体を格納する変数
+    rag_prompt = embedding.create_rag_prompt(question, token_limit=95000)
+
+    result_prompt = rag_prompt + "\n# Instructions\n" + question
+
+    # 回答テキストをファイル化して返信
+    file_data = BytesIO(result_prompt.encode('utf-8'))
+    file_data.seek(0)
+    await interaction.followup.send(content="ChatGPTに入力するプロンプトを作ったよ！", file=discord.File(file_data, filename="prompt.txt"))
 
 keep_alive()
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
