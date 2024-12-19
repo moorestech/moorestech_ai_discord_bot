@@ -18,7 +18,7 @@ def update_embedding():
     for embedding in moorestech_embedding:
         embedding['checked'] = False
 
-    for file in cs_file.get_cs_files():
+    for file in cs_file.get_pjt_files():
 
         # すでにベクトル化されているかをチェック
         is_checked = False

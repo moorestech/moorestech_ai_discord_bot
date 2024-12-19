@@ -3,7 +3,7 @@ import os
 MOORESTECH_PATH = "/Users/katsumi.sato/moorestech"
 
 
-def get_cs_files():
+def get_pjt_files():
     results = []
     ignore_files = [
         "AssemblyInfo.cs",
@@ -44,6 +44,6 @@ def get_cs_files():
 
 
 if __name__ == "__main__":
-    cs_files = get_cs_files()
+    cs_files = get_pjt_files()
     for cs_file in cs_files:
         print(cs_file["content"])
