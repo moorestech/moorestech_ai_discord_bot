@@ -109,7 +109,8 @@ async def ask_get_file(interaction: discord.Interaction, question: str, token_li
     # 回答テキストをファイル化して返信
     file_data = BytesIO(result_prompt.encode('utf-8'))
     file_data.seek(0)
-    await interaction.followup.send(content="ChatGPTに入力するプロンプトを作ったよ！", file=discord.File(file_data, filename="prompt.txt"))
+    message = "質問：" + question + "\nChatGPTに入力するプロンプトを作ったよ！"
+    await interaction.followup.send(content=message, file=discord.File(file_data, filename="prompt.txt"))
 
 keep_alive()
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
