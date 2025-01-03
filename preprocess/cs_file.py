@@ -17,6 +17,13 @@ def get_pjt_files():
         "lilToon",
         "DOTween",
         "moorestechInputSettings",
+
+        "Packages",
+        "ProjectSettings",
+        "Library",
+        "map.json",
+        "mono_crash",
+        "package.json",
     ]
 
     for root, dirs, files in os.walk(MOORESTECH_PATH):
@@ -26,7 +33,7 @@ def get_pjt_files():
             if any(ignore_file in root for ignore_file in ignore_files):
                 continue
 
-            if file.endswith(".cs"):
+            if file.endswith(".cs") or  file.endswith(".json"):
                 cs_source_code = open(os.path.join(root, file), "r", encoding="utf-8").read()
 
                 results.append(

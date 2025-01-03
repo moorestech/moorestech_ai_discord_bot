@@ -19,7 +19,9 @@ force_include_file_name = []
 with open("manual/force_include_file_name.txt", "r", encoding="utf-8") as f:
     force_include_file_name = f.read().splitlines()
 
-prompt = embedding.create_rag_prompt(rag_reference + usr_prompt, token_limit=95000, force_include_file_name=force_include_file_name)
+token_limit = 1000000000
+#token_limit = 95000
+prompt = embedding.create_rag_prompt(rag_reference + usr_prompt, token_limit=token_limit, force_include_file_name=force_include_file_name)
 
 prompt += ("コードを書く場合はコメント、空白、タブ、改行は本のコードと全く同じにしてください。適切な差分を維持するため、必要箇所以外は編集しないでください。"
            "また、コピペしやすいように、差分表記ではなく、コードそのものを記述してください。"
