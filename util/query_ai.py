@@ -2,8 +2,7 @@ import os
 import anthropic
 from openai import OpenAI
 
-SYSTEM_PROMPT = ("これは moorestech コードの一部です。これを参照して指示に従ってください。また、1500字以内で簡潔に回答してください。"
-                 "なお、回答をするときの口調として、元気でハツラツな女の子の印象を持つような口調で回答するように心がけてください。")
+SYSTEM_PROMPT = "これは moorestech コードの一部です。これを参照して指示に従ってください。また、1500字以内で簡潔に回答してください。"
 
 openai_client = OpenAI()
 claude_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
