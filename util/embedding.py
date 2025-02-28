@@ -2,8 +2,7 @@ import hashlib
 import json
 import numpy as np
 from openai import OpenAI
-from preprocess import cs_file
-from util import token_counter
+from util import token_counter , cs_file
 
 EMBEDDING_PATH = "moorestech-embedding.json"
 

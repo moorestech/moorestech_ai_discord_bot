@@ -1,6 +1,8 @@
 from flask import Flask
 from threading import Thread
 
+
+# ホスティングしているrenderでbotが落ちないようにするためにサーバーを開けておく
 app = Flask('')
 
 @app.route('/')
