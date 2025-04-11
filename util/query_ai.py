@@ -4,45 +4,29 @@ from openai import OpenAI
 
 SYSTEM_PROMPT = "これは moorestech コードの一部です。これを参照して指示に従ってください。また、1500字以内で簡潔に回答してください。"
 
-openai_client = OpenAI()
-claude_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+openai_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.environ["OPENROUTER_API_KEY"]
+)
 
 
-class ModelType:
-    GPT4 = 1
-    Claude3 = 2
 
+def query_ai(prompt):
+    messages = [{'role': 'user' , 'content': SYSTEM_PROMPT + prompt}]
 
-def query_ai(prompt, model_type):
-    response = ""
-    if model_type == ModelType.GPT4:
-        messages = [{'role': 'user', 'content': SYSTEM_PROMPT + prompt}]
-
-        completion = openai_client.chat.completions.create(
-            model="gpt-4o-2024-11-20",
-            messages=messages,
-        )
-        response = completion.choices[0].message.content
-    elif model_type == ModelType.Claude3:
-        # Claude-3
-
-        message = claude_client.messages.create(
-            model="claude-3-opus-20240229",
-            system=SYSTEM_PROMPT,
-            max_tokens=1024,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        response = message.content[0].text
+    completion = openai_client.chat.completions.create(
+        model="anthropic/claude-3.7-sonnet" ,
+        messages=messages ,
+    )
+    response = completion.choices[0].message.contentd
 
     return response
 
-async def query_ai_stream_gpt4(prompt):
+async def query_ai_stream(prompt):
     messages = [{'role': 'user', 'content': SYSTEM_PROMPT + prompt}]
     print(prompt)
     stream = openai_client.chat.completions.create(
-        model="gpt-4o",
+        model="anthropic/claude-3.7-sonnet" ,
         messages=messages,
         stream=True,
     )

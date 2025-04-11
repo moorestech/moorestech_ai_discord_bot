@@ -10,5 +10,5 @@ async def run_ask_ai_stream(prompt):
 
 if __name__ == "__main__":
     embedding.update_embedding()
-    result = asyncio.run(run_ask_ai_stream("コードについて教えて下さい。"))
+    result = asyncio.run(run_ask_ai_stream("TrainStationのblockサイズを取得するコード。"))
     print(f"Result: {result}")

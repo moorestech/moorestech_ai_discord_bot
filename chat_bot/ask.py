@@ -17,5 +17,5 @@ async def ask_ai_stream(usr_prompt):
     prompt = rag_prompt + "\n" + usr_prompt
 
     print("[ask_ai_stream] start query_ai_stream...")
-    async for chunk in query_ai.query_ai_stream_gpt4(prompt):
+    async for chunk in query_ai.query_ai_stream(prompt):
         yield chunk
